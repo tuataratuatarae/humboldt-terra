@@ -1,0 +1,1779 @@
+---
+title: "testing functions 1:1"
+author: "Nicholas Chang"
+date: "2025-03-14"
+output: html_document
+---
+
+# dependencies
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(spatstat.geom)
+library(adehabitatHR)
+library(gbm)
+library(dismo)
+library(geosphere)
+library(sf)
+
+```
+
+
+## humboldt.scrub.env()
+
+```{r cars}
+# load environmental variables for all sites of the study area 1 (env1). Column names should be x,y,X1,X2,...,Xn)
+
+
+humboldt.scrub.env <- function(in_data) {
+    l <- list()
+    r.in <- nrow(in_data)
+    num_data <- data.frame(data.matrix(in_data))
+    numeric_columns <- sapply(num_data,function(x){mean(as.numeric(is.na(x))) < 0.7})
+    ncc<-length(numeric_columns[numeric_columns==TRUE])
+    nall<-ncol(in_data)
+    if (ncc!=nall){
+    final_data <- data.frame(num_data[, numeric_columns], char_data[, !numeric_columns])
+    l <- na.exclude(final_data)
+    }
+    if (ncc==nall){
+    final_data <- num_data
+    l <- na.exclude(final_data)
+    }
+    r.out <- nrow(l)
+    print(paste((r.in - r.out), " rows of data (of ", r.in, " input,", (round((r.in - r.out)/r.in, 
+        4) * 100), "%) were removed due to the presence of missing data or text"))
+    return(l)
+}
+
+env1<-read.delim("../data-raw/env1.txt",h=T,sep="\t")
+env1<-humboldt.scrub.env(env1)
+```
+
+## humboldt.pnt.index()
+
+```{r}
+humboldt.pnt.index <- function(glob.g, glob.s, sp, R = 100, kern.smooth = 1) {
+    if (kern.smooth == "auto") {
+        Kern.SmZ <- "href"
+        Kern.SmZZ <- 0.5
+    }
+    if (kern.smooth != "auto") {
+        Kern.SmZ <- 0.03 * kern.smooth
+        Kern.SmZZ <- 20 * Kern.SmZ
+    }
+    # glob: global background dataset for the whole study area, glob.s: background for sp1 sp:
+    # occurrence dataset R: resolution of the grid
+    glob.g<- as.matrix(glob.g)
+    glob.s <- as.matrix(glob.s)
+    sp <- as.matrix(sp)
+    
+    th.sp = 0
+    th.env = 0
+    l <- list()
+    
+    if (ncol(glob.g) > 2) 
+        stop("cannot calculate overlap with more than two axes")
+    if (ncol(glob.g) == 1) 
+        stop("cannot calculate overlap on one axes")
+    
+    if (ncol(glob.g) == 2) {
+        # if scores in two dimensions (e.g. PCA)
+        xmin <- min(glob.g[, 1] - Kern.SmZZ*10)
+        xmax <- max(glob.g[, 1] + Kern.SmZZ*10)
+        ymin <- min(glob.g[, 2] - Kern.SmZZ*10)
+        ymax <- max(glob.g[, 2] + Kern.SmZZ*10)  # data preparation\t
+        glob.sr <- data.frame(cbind((glob.s[, 1] - xmin)/abs(xmax - xmin), (glob.s[, 2] - ymin)/abs(ymax - 
+            ymin)))
+        spr <- data.frame(cbind((sp[, 1] - xmin)/abs(xmax - xmin), (sp[, 2] - ymin)/abs(ymax - 
+            ymin)))
+        mask <- ascgen(SpatialPoints(cbind((1:R)/R, (1:R)/R)), nrcol = R - 2, count = FALSE)
+        sp.dens <- kernelUD(SpatialPoints(spr[, 1:2]), h = Kern.SmZ, grid = mask, kern = "bivnorm")
+        sp.dens <- raster(xmn = xmin, xmx = xmax, ymn = ymin, ymx = ymax, matrix(sp.dens$ud, 
+            nrow = R))
+        glob.s.dens <- kernelUD(SpatialPoints(glob.sr[, 1:2]), grid = mask, kern = "bivnorm")
+        glob.s.dens <- raster(xmn = xmin, xmx = xmax, ymn = ymin, ymx = ymax, matrix(glob.s.dens$ud, 
+            nrow = R))
+        x <- seq(from = min(glob.g[, 1]), to = max(glob.g[, 1]), length.out = R)
+        y <- seq(from = min(glob.g[, 2]), to = max(glob.g[, 2]), length.out = R)
+        glob.sr <- extract(glob.s.dens, glob.s)
+        Z.th <- quantile(glob.sr, th.env)
+        glob.s.dens[glob.s.dens < Z.th] <- 0
+        Z <- glob.s.dens * nrow(glob.s)/cellStats(glob.s.dens, "sum")
+        spr <- extract(sp.dens, sp)
+        z.th <- quantile(spr, th.sp)
+        sp.dens[Z == 0] <- 0
+        sp.dens[sp.dens < z.th] <- 0
+        z <- sp.dens * nrow(sp)/cellStats(sp.dens, "sum")
+        z.uncor <- z/cellStats(z, "max")
+        z.cor <- z/Z
+        z.cor[is.na(z.cor)] <- 0
+        z.cor <- z.cor/cellStats(z.cor, "max")
+        Z2 <- matrix(Z, nrow = R, ncol = R, byrow = F)
+        z.cor2 <- matrix(z.cor, nrow = R, ncol = R, byrow = F)
+        z.uncor2 <- matrix(z.uncor, nrow = R, ncol = R, byrow = F)
+        ratio=0
+        Benv=contourLines(x, (sort((y ))), Z2, nlevels=1, quantile(Z2[Z2 > 0], c(0.15)))
+        for (i in 1:length(Benv)) {		
+           Bx<-Benv[[i]]$x
+           By<-Benv[[i]]$y
+           xyB<-cbind(Bx,By)
+           p = Polygon(xyB)
+           ps1 = Polygons(list(p),1)
+           if (i ==1) {sBenv = SpatialPolygons(list(ps1))}
+           if (i !=1) {sBenv = SpatialPolygons(list(ps1))+sBenv}
+           }
+        Bsp=contourLines(x, (sort((y ))), z.uncor2, nlevels=1, levels = quantile(z.uncor2[z.uncor2 > 0], c(0.05)))
+        for (i in 1:length(Bsp)) {
+           Ax<-Bsp[[i]]$x
+           Ay<-Bsp[[i]]$y
+           xyA<-cbind(Ax,Ay)
+           p = Polygon(xyA)
+           ps1 = Polygons(list(p),1)
+           if (i ==1) {sBsp = SpatialPolygons(list(ps1))}
+           if (i !=1) {sBsp = SpatialPolygons(list(ps1))+sBsp}
+           }
+        sBsp=gUnaryUnion(sBsp)
+        sBenv=gUnaryUnion(sBenv)
+        sBf=sBsp+sBenv
+        borders = gDifference(
+           as(sBf,"SpatialLines"),
+           
+           #modifying this code to be with sf
+           #as(gUnaryUnion(sBf),"SpatialLines"),
+           as(st_union(sBf),"SpatialLines"),
+           byid=TRUE)
+        bordersL<-lengthLine(borders)
+        bordersF<-lengthLine(sBsp)
+        nborders=length(borders)
+        bordersD<-bordersL[1]-bordersL[2]
+        if (nborders==3){
+             ratio<-bordersL[1]/bordersF}
+        if (nborders==2 & bordersD>=1){
+             ratio<-1
+             }
+        if (nborders==2 & bordersD<1){
+             ratio<-0
+             }
+        print("Potential Niche Truncation Index:")
+        print(ratio)
+        if (ratio>1){
+             ratio<-1}
+        if (ratio<0.05){
+             print("Minimal potential niche truncation")}
+        if (ratio>=0.05 & ratio<0.15){
+             print("Some potential niche truncation")}
+        if (ratio>=0.15 & ratio<0.3){
+             print("Moderate potential niche truncation")}			 
+        if (ratio>=0.3 ){
+             print("High potential niche truncation")}
+        print("****************")
+        l$pnt.index <- ratio		
+        }
+    return(l)  #as.matrix(Z@data@values,nrow=R,ncol=R,byrow=F)as.matrix(z.cor@data@values)as.matrix(z.uncor@data@values)
+}
+
+```
+
+## humboldt.occ.rarefy()
+```{r}
+humboldt.occ.rarefy <- function(in.pts, colxy = 2:3, rarefy.dist = 0, rarefy.units = "km", run.silent.rar = F) {
+    switch(Sys.info()[['sysname']],
+       Windows= {userOS=1},
+       Linux  = {userOS=2},
+       Darwin = {userOS=2})
+	
+	if (rarefy.units == "KM"){rarefy.units = "km"}
+	if (rarefy.units == "Km"){rarefy.units = "km"}
+	if (rarefy.units == "DD"){rarefy.units = "dd"}
+	if (rarefy.units == "Dd"){rarefy.units = "dd"}
+
+	if (rarefy.units == "km") {
+        min.dist <- rarefy.dist * 1000  #values in km
+        sp2p1 <- SpatialPoints(in.pts[, colxy], CRS("+proj=longlat +datum=WGS84"))
+        sp2p2 <- spTransform(sp2p1, CRS("+proj=aeqd +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
+        xy <- data.frame(x4r = coordinates(sp2p2)[, 1], y4r = coordinates(sp2p2)[, 2])
+		xy <- data.frame(cbind(xy,in.pts))#new
+    }
+    
+    if (rarefy.units == "dd") {
+        yy <- colxy[2]
+        maxLat <- max(in.pts[, yy])
+        minLat <- min(in.pts[, yy])
+        # estimage dd to km for study area
+        rare.dd <- (mean(c(maxLat, minLat)))
+        adjKm <- (-0.0139 * (rare.dd * rare.dd)) + (0.0898 * rare.dd) + 111.1
+        min.dist <- adjKm * rarefy.dist * 1000  #values in km
+        print(paste("Value used for rarefying:", round((min.dist/1000), 2), "km. Remember that the length of a decimal degrees changes latitudinally due to the convergence of the lines of longitude at the poles. The value used here is the average distance of decimal-degrees within your study area. Alternatively, simply input distance as km value and change rarefy.units='km'"))
+        sp2p1 <- SpatialPoints(in.pts[, colxy], CRS("+proj=longlat +datum=WGS84"))
+        sp2p2 <- spTransform(sp2p1, CRS("+proj=aeqd +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
+        xy <- data.frame(x4r = coordinates(sp2p2)[, 1], y4r = coordinates(sp2p2)[, 2])
+    }
+    
+	nPts<-nrow(xy)
+    if (run.silent.rar == F & userOS==1){pb <- winProgressBar(title = "Initializing",min = 0,max =nPts, width = 300)}
+	if (run.silent.rar == F & userOS==2){pb <- tkProgressBar(title = "Initializing", label = "", min = 0, max = nPts, initial = nPts, width = 300)}
+	# setup env- sepaerate from distance
+    spName <- in.pts[, 1][1]
+    new.data <- NULL
+    
+    to <- 1
+    del.min.dist <- xy
+    
+    repeat {
+        nn1 <- nndist(del.min.dist[, "x4r"], del.min.dist[, "y4r"])  # calculate distance nearest neighbour
+        if (sum(nn1 < min.dist) == 0) {
+            break
+        }
+        
+        # iteratively removing points starting with the one having the minimal distance to the
+        # nearest neighbour
+        nn2 <- nndist(del.min.dist[, "x4r"], del.min.dist[, "y4r"], k = 2)
+        
+        del1 <- nn1 == min(nn1)
+        del2 <- nn2 == min(nn2[del1])
+        delk <- del1 & del2
+        if (sum(del2) > 1) {
+            for (k in 3:6) {
+                nn <- nndist(del.min.dist[, "x4r"], del.min.dist[, "y4r"], k = k)
+                delk <- delk & nn == min(nn[delk])
+				if (run.silent.rar == F & userOS==1){setWinProgressBar(pb, length(delk), title=paste(" Rarefying:",length(delk),"remaining localities (of", nPts,"input)"))}
+				if (run.silent.rar == F & userOS==2){setTkProgressBar(pb, length(delk), title=paste(length(delk),"remaining pts (of", nPts))}
+				if (sum(nn[delk] == min(nn[delk])) > 1) {
+                  break
+                }
+            }
+        }
+        # from the two points which are the nearest neighbours of the whole set, remove the one
+        # closest to the second neighbour
+        del.min.dist <- del.min.dist[-(which(delk)[1]), ]
+    }
+	if (run.silent.rar == F){close(pb)}
+    new.data <- rbind(new.data, del.min.dist)
+	nc<-(ncol(new.data))
+	col.orig<-c(3:nc)
+    data.out<-new.data[,col.orig]
+    print(paste("Starting points =", nrow(xy), ", Final rarefied points =", nrow(new.data)))
+	return(data.out)
+}
+
+```
+
+## humboldt.top.env() 
+
+```{r}
+humboldt.top.env <- function(env1, env2, sp1, sp2, rarefy.dist = 0, rarefy.units="km", env.reso, learning.rt1 = 0.01, 
+    learning.rt2 = 0.01, e.var, pa.ratio = 4, steps1 = 50, steps2 = 50, method = "contrib", nvars.save = 5, 
+    contrib.greater = 5) # method=='estimate' method=='contrib' method=='nvars'
+{
+    if (method== "ESTIMATE"){method = "estimate"}
+    if (method== "Estimate"){method = "estimate"}
+    if (method== "CONTRIB"){method = "contrib"}
+    if (method== "Contrib"){method = "contrib"}
+    if (method== "contribution"){method = "contrib"}
+    if (method== "Nvars"){method = "nvars"}
+    if (method== "NVARS"){method = "nvars"}
+	if (rarefy.units == "km"){rarefy.units = "km"}
+	if (rarefy.units == "Km"){rarefy.units = "km"}
+	if (rarefy.units == "DD"){rarefy.units = "dd"}
+	if (rarefy.units == "Dd"){rarefy.units = "dd"}
+
+	l <- list()
+    x2var <- e.var + 1
+    occ.sp1in <- humboldt.occ.rarefy(in.pts = sp1, colxy = 2:3, rarefy.dist = rarefy.dist, rarefy.units=rarefy.units)
+    occ.sp2in <- humboldt.occ.rarefy(in.pts = sp2, colxy = 2:3, rarefy.dist = rarefy.dist, rarefy.units=rarefy.units)
+    # create sp occurrence dataset by adding environmental variables from the global
+    # environmental datasets resolution should be the resolution of the environmental data grid
+    occ.sp1 <- na.exclude(humboldt.sample.spp(dfsp = occ.sp1in, colspxy = 2:3, colspkept = NULL, 
+        dfvar = env1, colvarxy = 1:2, colvar = "all", resolution = env.reso))
+    occ.sp2 <- na.exclude(humboldt.sample.spp(dfsp = occ.sp2in, colspxy = 2:3, colspkept = NULL, 
+        dfvar = env2, colvarxy = 1:2, colvar = "all", resolution = env.reso))
+    ## proper number of PA
+    nnsp1 <- nrow(occ.sp1)
+    nnenv1 <- nrow(env1)
+    nnpa1 <- nnsp1 * pa.ratio
+    if (nnpa1 > nnenv1) {
+        nnpa1 <- nnenv1
+    }
+    nnsp2 <- nrow(occ.sp2)
+    nnenv2 <- nrow(env2)
+    nnpa2 <- nnsp2 * pa.ratio
+    if (nnpa2 > nnenv2) {
+        nnpa2 <- nnenv2
+    }
+    
+    ## sp1
+    climSample <- env1[sample(nrow(env1), nnpa1), ]
+    nClim <- nrow(climSample)
+    ID <- rep(0, nClim)
+    clim <- cbind(ID, climSample)
+    nSp <- nrow(occ.sp1)
+    ID <- rep(1, nSp)
+    sp <- cbind(ID, occ.sp1)
+    datamodel <- rbind(sp, clim)
+    
+    if (method == "nvars" || method == "contrib") {
+        modelOutA <- gbm.step(data = datamodel, gbm.x = x2var, gbm.y = 1, family = "bernoulli", 
+            tree.complexity = 5, learning.rate = learning.rt1, step.size = steps1, bag.fraction = 0.5, 
+            plot.main = FALSE, plot.folds = FALSE)
+    }
+    if (method == "estimate") {
+        modelOut1A <<- gbm.step(data = datamodel, gbm.x = x2var, gbm.y = 1, family = "bernoulli", 
+            tree.complexity = 5, learning.rate = learning.rt1, step.size = steps1, bag.fraction = 0.5, 
+            plot.main = FALSE, plot.folds = FALSE)
+        mod.simpA <<- gbm.simplify(modelOut1A)
+        min.y <- min(c(0, mod.simpA$deviance.summary$mean))
+        n.vars1 <- match(min.y, c(0, mod.simpA$deviance.summary$mean)) - 1
+        vars1.use <- mod.simpA$pred.list[[n.vars1]]
+        names(env1)[vars1.use]
+        modelOutA <- gbm.step(data = datamodel, gbm.x = mod.simpA$pred.list[[n.vars1]], gbm.y = 1, 
+            family = "bernoulli", tree.complexity = 5, learning.rate = learning.rt1, step.size = steps1, 
+            bag.fraction = 0.5, plot.main = FALSE, plot.folds = FALSE)
+    }
+    # varInc1<-modelOut$contributions[1:5,][,1]
+    if (method == "nvars") {
+        varInc1 <- toString(modelOutA$contributions[1:nvars.save, ][, 1])
+    }
+    if (method == "estimate") {
+        varInc1 <- toString(modelOutA$contributions[, 1])
+    }
+    if (method == "contrib") {
+        varInc1 <- toString(modelOutA$contributions$var[modelOutA$contributions$rel.inf > contrib.greater])
+    }
+    ## sp2
+    climSample <- env2[sample(nrow(env2), nnpa2), ]
+    nClim <- nrow(climSample)
+    ID <- rep(0, nClim)
+    clim <- cbind(ID, climSample)
+    nSp <- nrow(occ.sp2)
+    ID <- rep(1, nSp)
+    sp <- cbind(ID, occ.sp2)
+    datamodel <- rbind(sp, clim)
+    
+    if (method == "nvars" || method == "contrib") {
+        modelOutB <- gbm.step(data = datamodel, gbm.x = x2var, gbm.y = 1, family = "bernoulli", 
+            tree.complexity = 5, learning.rate = learning.rt2, step.size = steps2, bag.fraction = 0.5, 
+            plot.main = FALSE, plot.folds = FALSE)
+    }
+    
+    if (method == "estimate") {
+        modelOut1B <- gbm.step(data = datamodel, gbm.x = x2var, gbm.y = 1, family = "bernoulli", 
+            tree.complexity = 5, learning.rate = learning.rt2, step.size = steps2, bag.fraction = 0.5, 
+            plot.main = FALSE, plot.folds = FALSE)
+        mod.simpB <<- gbm.simplify(modelOut1B)
+        min.y <- min(c(0, mod.simpB$deviance.summary$mean))
+        n.vars2 <- match(min.y, c(0, mod.simpB$deviance.summary$mean)) - 1
+        vars2.use <- mod.simpB$pred.list[[n.vars2]]  #-1
+        names(env1)[vars2.use]
+        modelOutB <- gbm.step(data = datamodel, gbm.x = mod.simpB$pred.list[[n.vars2]], gbm.y = 1, 
+            family = "bernoulli", tree.complexity = 5, learning.rate = learning.rt2, step.size = steps2, 
+            bag.fraction = 0.5, plot.main = FALSE, plot.folds = FALSE)
+    }
+    if (method == "nvars") {
+        varInc2 <- toString(modelOutB$contributions[1:nvars.save, ][, 1])
+    }
+    if (method == "estimate") {
+        varInc2 <- toString(modelOutB$contributions[, 1])
+    }
+    if (method == "contrib") {
+        varInc2 <- toString(modelOutB$contributions$var[modelOutB$contributions$rel.inf > contrib.greater])
+    }
+    
+    # select columns in model
+    varInc1a <- gsub(" ", "", varInc1, fixed = TRUE)
+    varInc1b <- unlist(strsplit(varInc1a[1], split = ","))
+    varInc2a <- gsub(" ", "", varInc2, fixed = TRUE)
+    varInc2b <- unlist(strsplit(varInc2a[1], split = ","))
+    print(varInc1a)
+    print(varInc2a)
+    
+    # begin partition environment
+    env1sp1 <- subset(env1, select = c(varInc1b))
+    env1sp2 <- subset(env1, select = c(varInc2b))
+    env2sp1 <- subset(env2, select = c(varInc1b))
+    env2sp2 <- subset(env2, select = c(varInc2b))
+    # reconstruct original environmental variables with xy
+    env1pre <- cbind(env1[1:2], env1sp1, env1sp2)
+    env2pre <- cbind(env2[1:2], env2sp1, env2sp2)
+    # store new environment columns and remove duplicate names
+    l$env1 <- env1pre[, !duplicated(colnames(env1pre))]
+    l$env2 <- env2pre[, !duplicated(colnames(env2pre))]
+    return(l)
+    
+}
+
+```
+
+## humboldt.sample.spp
+```{r}
+humboldt.sample.spp <- function(dfsp, colspxy = 2:3, colspkept = "xy", dfvar, colvarxy = 1:2, 
+    colvar = "all", resolution, run.silent.sam = F) {
+
+    switch(Sys.info()[['sysname']],
+       Windows= {userOS=1},
+       Linux  = {userOS=2},
+       Darwin = {userOS=2})
+    
+    if (sum(colspkept == "xy") == 1) 
+        colspkept <- colspxy
+    if (sum(colvar == "all") == 1) {
+        if (!is.null(colspkept)) 
+            colvar <- (1:ncol(dfvar))[-colvarxy]
+        if (is.null(colspkept)) 
+            colvar <- (1:ncol(dfvar))
+    }
+    colspx <- colspxy[1]
+    colspy <- colspxy[2]
+    colvarx <- colvarxy[1]
+    colvary <- colvarxy[2]
+    
+    x <- dfsp[, colspx]
+    X <- dfvar[, colvarx]
+    y <- dfsp[, colspy]
+    Y <- dfvar[, colvary]
+    
+    train <- data.frame(matrix(nrow = nrow(dfsp), ncol = length(colvar)))
+    names(train) <- names(dfvar)[colvar]
+    
+    npts<-nrow(dfsp)
+    if (run.silent.sam == F & userOS==1){pb <- winProgressBar(title = "Initializing",min = 0, max =npts, width = 300)}
+	if (run.silent.sam == F & userOS==2){pb <- tkProgressBar(title = "Initializing", label = "", min = 0, max = npts, initial = 0, width = 300)}
+    for (i in 1:nrow(dfsp)) {
+        dist <- sqrt((X - x[i])^2 + (Y - y[i])^2)
+        min <- min(dist)
+        if (min <= resolution) {
+            if (length(colvar) > 1) 
+                train[i, ] <- dfvar[dist == min, colvar][1, ]
+            if (length(colvar) == 1) 
+                train[i, ] <- dfvar[dist == min, colvar][1]
+        }
+		if (run.silent.sam == F & userOS==1){setWinProgressBar(pb, i, title=paste("Sampling data:",i,"(of",npts,"input)"))}
+		if (run.silent.sam == F & userOS==2){setTkProgressBar(pb, i, title=paste("Sampling data:",i,"(of",npts,")"))}
+        }
+        
+    if (!is.null(colspkept)) 
+        final <- cbind(dfsp[, colspkept], train)
+    if (is.null(colspkept)) 
+        final <- train
+	if (run.silent.sam == F){close(pb)}
+    return(final)
+}
+
+
+```
+
+ 
+ 
+ 
+## humboldt.g2e()
+```{r}
+
+humboldt.g2e <- function(env1, env2, sp1, sp2, reduce.env = 2, reductype = "PCA", non.analogous.environments = "NO", nae.window=5,
+    env.trim = T, e.var, col.env = e.var, env.trim.type="MCP", trim.mask1, trim.mask2, trim.buffer.sp1 = 200, trim.buffer.sp2 = 200, pcx=1, pcy=2, rarefy.dist  = 0, rarefy.units = "km" , env.reso, kern.smooth = 1, R = 100, run.silent = F) {
+
+	### scrub text parameters lc vs uc
+	if (non.analogous.environments == "Yes"){non.analogous.environments = "YES"}
+	if (non.analogous.environments == "yes"){non.analogous.environments = "YES"}
+	if (non.analogous.environments == "No"){non.analogous.environments = "NO"}
+	if (non.analogous.environments == "no"){non.analogous.environments = "NO"}
+	if (reductype == "Pca"){reductype = "PCA"}
+	if (reductype == "pca"){reductype = "PCA"}
+	if (reductype == "Standard"){reductype = "STANDARD"}
+	if (reductype == "standard"){reductype = "STANDARD"}
+	if (env.trim.type =="Mcp"){env.trim.type="MCP"}
+	if (env.trim.type =="mcp"){env.trim.type="MCP"}
+	if (env.trim.type =="Radius"){env.trim.type="RADIUS"}
+	if (env.trim.type =="radius"){env.trim.type="RADIUS"}
+	if (env.trim.type =="Mask"){env.trim.type="MASK"}
+	if (env.trim.type =="mask"){env.trim.type="MASK"}
+	if (rarefy.units == "KM"){rarefy.units = "km"}
+	if (rarefy.units == "Km"){rarefy.units = "km"}
+	if (rarefy.units == "DD"){rarefy.units = "dd"}
+	if (rarefy.units == "Dd"){rarefy.units = "dd"}
+	if (kern.smooth == "AUTO"){kern.smooth = "auto"}
+	if (kern.smooth == "Auto"){kern.smooth = "auto"}
+	###############################################################
+	if (reduce.env == 0) {
+        REDUC = 0
+    }
+    if (reduce.env == 1 & reductype == "STANDARD") {
+        REDUC = 1
+    }
+    if (reduce.env == 2 & reductype == "STANDARD") {
+        REDUC = 2
+    }
+    if (reduce.env == 1 & reductype == "PCA" & non.analogous.environments == "YES") {
+        REDUC = 3
+    }
+    if (reduce.env == 2 & reductype == "PCA" & non.analogous.environments == "YES") {
+        REDUC = 4
+    }
+    if (reduce.env == 2 & reductype == "PCA" & non.analogous.environments == "NO") {
+        REDUC = 5
+    }
+    if (reduce.env == 1 & reductype == "PCA" & non.analogous.environments == "NO") {
+        REDUC = 6
+    }
+    
+    l <- list()
+    ########################################################################### 
+    kern.smoothinZ <- kern.smooth
+    env1FULL <- env1
+    env2FULL <- env2
+	##if PROJ =F, the models are calibrated on both ranges. If PROJ =T, the models are calibrated on species 1 range only and projected to range 2
+    PROJ<-F
+	##calibrate PCA on only occurrence data (env.pca=F) or environment data (env.pca=T), recommended is env.pca=T
+	env.pca = T
+    ###########################################################################
+    ## consider if data are rarefied
+    if (rarefy.units=="dd"){rde <- rarefy.dist/env.reso}
+    if (rarefy.units=="km"){env.reso1<-rarefy.dist/111;rde <- env.reso1/env.reso}
+    if (rde <= 0.97 & rarefy.units=="dd" & env.reso >= env.reso) {
+        print(paste("Warning!! Please consider increasing the spatial rarefying distance. Your input enviromenment resolution is ", 
+            env.reso, "decimal degrees, and a rarefy distance=", rarefy.dist, " decimal degrees."))}
+    if (rde <= 0.97 & rarefy.units=="dd" & env.reso < env.reso) {
+        print(paste("Warning!! Please consider spatially rarefying your input occurrence localities. Equivalency and background statistics can result in type I errors if spatial data have not been properly rarefied. In most situations, data should be spatially rarefied at a distance of 10-80km (~0.0836-0.6667 decimal degrees).  If you have done this outside of Humboldt- ignore this warning. Input: environment resolution=", 
+            env.reso, "decimal degrees, and a rarefy distance=", rarefy.dist, " decimal degrees."))}
+	if (rde <= 0.97 & rarefy.units=="km" & env.reso >= env.reso) {
+        print(paste("Warning!! Please consider increasing the spatial rarefying distance. Your input enviromenment resolution is ", 
+            env.reso, "decimal degrees, and a rarefy distance=", rarefy.dist, " km (~",env.reso1," decimal degrees)"))}
+	if (rde <= 0.97 & rarefy.units=="km" & env.reso < env.reso) {
+        print(paste("Warning!! Please consider spatially rarefying your input occurrence localities. Equivalency and background statistics can result in type I errors if spatial data have not been properly rarefied. In most situations, data should be spatially rarefied at a distance of 10-80km (~0.0836-0.6667 decimal degrees).  If you have done this outside of Humboldt- ignore this warning. Input: environment resolution=", 
+            env.reso, "decimal degrees, and a rarefy distance=", rarefy.dist, " km (~",env.reso1," decimal degrees)"))}
+
+    ###########################################################################
+    ##################Trim the occurrence locs by buffered MCP#################
+    ###########################################################################
+
+    if (env.trim== T & env.trim.type=="MCP") {
+        options(warn = -1)
+        
+        CmaxF <- max(env1[, 2])
+        CminF <- min(env1[, 2])
+        DmaxF <- max(env2[, 2])
+        DminF <- min(env2[, 2])
+        
+        # estimage dd to km for study area
+        Env1.dd.y <- mean(c(CmaxF,CminF))
+        Env2.dd.y <- mean(c(DmaxF,DminF))
+        
+        ### Jason's dirty dd to km for lat
+        AvgKm1 <- abs(((-0.0139 * (Env1.dd.y * Env1.dd.y)) + (0.0898 * Env1.dd.y) + 111.1))
+        AvgKm2 <- abs(((-0.0139 * (Env2.dd.y * Env2.dd.y)) + (0.0898 * Env2.dd.y) + 111.1))
+        
+        # Sp1
+        env1in <- env1
+        trim.buffer.sp1v <- (trim.buffer.sp1/AvgKm1)  #values in km
+        trim.buffer.sp2v <- (trim.buffer.sp2/AvgKm2)  #values in km
+        OcSp1T <- SpatialPoints(sp1[, 2:3], CRS("+proj=longlat +datum=WGS84"))
+        OcSp1Tmcp <- mcp(OcSp1T, percent = 100)
+        OcSp1Tmcp <- spTransform(OcSp1Tmcp, CRS("+proj=longlat +datum=WGS84"))
+        OcSp1TmcpB <- raster::buffer(OcSp1Tmcp, width = trim.buffer.sp1v, dissolve = T)
+        env1Tmcp <- SpatialPoints(env1in, CRS("+proj=longlat +datum=WGS84"))
+        env1sdf <- env1Tmcp[OcSp1TmcpB, ]
+        env1 <- as.data.frame(env1sdf)
+        # Sp2
+        env2in <- env2
+        OcSp2T <- SpatialPoints(sp2[, 2:3], CRS("+proj=longlat +datum=WGS84"))
+        OcSp2Tmcp <- mcp(OcSp2T, percent = 100)
+        OcSp2Tmcp <- spTransform(OcSp2Tmcp, CRS("+proj=longlat +datum=WGS84"))
+        OcSp2TmcpB <- raster::buffer(OcSp2Tmcp, width = trim.buffer.sp2v, dissolve = T)
+        env2Tmcp <- SpatialPoints(env2in, CRS("+proj=longlat +datum=WGS84"))
+        env2sdf <- env2Tmcp[OcSp2TmcpB, ]
+        env2 <- as.data.frame(env2sdf)
+        options(warn = 0)
+    }
+    # env2
+    ###########################################################################
+    ##################Trim the occurrence locs by buffered pnts################
+    ###########################################################################
+	if (env.trim== T & env.trim.type=="RADIUS"){
+        options(warn = -1)
+        
+        # Sp1
+        env1in <- env1
+        trim.buffer.sp1v <- (trim.buffer.sp1*1000)  #values in m
+        trim.buffer.sp2v <- (trim.buffer.sp2*1000)  #values in m
+        OcSp1T <- SpatialPoints(sp1[, 2:3], CRS("+proj=longlat +datum=WGS84"))
+        OcSp1TmcpB <- raster::buffer(OcSp1T, width = trim.buffer.sp1v, dissolve = T)
+        env1Tmcp <- SpatialPoints(env1in, CRS("+proj=longlat +datum=WGS84"))
+        env1sdf <- env1Tmcp[OcSp1TmcpB, ]
+        env1 <- as.data.frame(env1sdf)
+        # Sp2
+        env2in <- env2
+        OcSp2T <- SpatialPoints(sp2[, 2:3], CRS("+proj=longlat +datum=WGS84"))
+        OcSp2TmcpB <- raster::buffer(OcSp2T, width = trim.buffer.sp2v, dissolve = T)
+        env2Tmcp <- SpatialPoints(env2in, CRS("+proj=longlat +datum=WGS84"))
+        env2sdf <- env2Tmcp[OcSp2TmcpB, ]
+        env2 <- as.data.frame(env2sdf)
+        options(warn = 0)
+    }
+	###########################################################################
+    ##################Trim the occurrence locs by input polygons: Mask1_ply...#
+    ###########################################################################
+	if (env.trim== T & env.trim.type=="MASK") {
+        options(warn = -1)   
+        # Sp1
+        env1in <- env1
+        env1T <- SpatialPoints(env1in, CRS("+proj=longlat +datum=WGS84"))
+		env1T <- env1T[!is.na(over(env1T,as(trim.mask1,"SpatialPolygons"))),]	
+        env1 <- as.data.frame(env1T)
+        # Sp2
+        env2in <- env2
+        env2T <- SpatialPoints(env2in, CRS("+proj=longlat +datum=WGS84"))
+		env2T <- env2T[!is.na(over(env2T,as(trim.mask2,"SpatialPolygons"))),]	
+        env2 <- as.data.frame(env2T)
+        options(warn = 0)
+    }
+    ########################################################################### 
+    if (REDUC == 1) {
+        for (i in col.env) {
+            y <- i
+            Amax <- max(env1[, y])
+            Bmin <- min(env1[, y])
+            Cmax <- max(env2[, y])
+            Dmin <- min(env2[, y])
+            env2 <- env2[which(env2[, y] <= Amax & env2[, y] >= Bmin), ]
+            print(paste("***Environmental Variable:", y))
+            print("BEFORE REDUCTION")
+            print(paste("Maximum values: Environment 1", Amax, "and Environment 2", Cmax))
+            print(paste("Minimum values: Environment 1", Bmin, "and Environment 2", Dmin))
+            Amax2 <- max(env1[, y])
+            Bmin2 <- min(env1[, y])
+            Cmax2 <- max(env2[, y])
+            Dmin2 <- min(env2[, y])
+            print(paste("AFTER REDUCTION"))
+            print(paste("Maximum values for Environment 2: ", Cmax2))
+            print(paste("Minimum values for Environment 2: ", Dmin2))
+            print("*******************")
+        }
+        print(paste(nrow(env2FULL) - nrow(env2), " sites removed from environment 2"))
+    }
+    if (REDUC == 2) {
+        for (i in col.env) {
+            y <- i
+            Amax <- max(env1[, y])
+            Bmin <- min(env1[, y])
+            env2 <- env2[which(env2[, y] <= Amax & env2[, y] >= Bmin), ]
+            env1 <- env1[which(env1[, y] <= Cmax & env1[, y] >= Dmin), ]
+            print(paste("***Environmental Variable:", y))
+            print("BEFORE REDUCTION")
+            print(paste("Maximum values: Environment 1", Amax, "and Environment 2", Cmax))
+            print(paste("Minimum values: Environment 1", Bmin, "and Environment 2", Dmin))
+            Amax2 <- max(env1[, y])
+            Bmin2 <- min(env1[, y])
+            Cmax2 <- max(env2[, y])
+            Dmin2 <- min(env2[, y])
+            print(paste("AFTER REDUCTION"))
+            print(paste("Maximum values for Environment 1", Amax2, "and Environment 2: ", Cmax2))
+            print(paste("Minimum values for Environment 1", Bmin2, "and Environment 2: ", Dmin2))
+            print("*******************")
+        }
+        print(paste(nrow(env1FULL) - nrow(env1), " sites removed from environment 1"))
+        print(paste(nrow(env2FULL) - nrow(env2), " sites removed from environment 2"))
+    }
+    
+    
+    # Environment for both ranges
+    env12 <- rbind(env1, env2)
+    names(env12)
+    ########################################################################### 
+    if (rarefy.dist != 0) {
+        print("Rarefying occurence data")
+        print("Sp1:")
+        occ.sp1 <- humboldt.occ.rarefy(in.pts = sp1, colxy = 2:3, rarefy.dist = rarefy.dist, 
+            rarefy.units=rarefy.units)
+        print("Sp2:")
+        occ.sp2 <- humboldt.occ.rarefy(in.pts = sp2, colxy = 2:3, rarefy.dist = rarefy.dist, 
+            rarefy.units=rarefy.units)
+    }
+    if (rarefy.dist == 0) {
+        occ.sp1 <- sp1[1:3]
+        occ.sp2 <- sp2[1:3]
+    }
+    # create sp occurrence dataset by adding environmental variables from the global
+    # environmental datasets resolution should be the resolution of the environmental data grids
+    print("Sampling environmental data to occurence data")
+    occ.sp1FULL <- na.exclude(humboldt.sample.spp(dfsp = occ.sp1, colspxy = 2:3, colspkept = NULL, 
+        dfvar = env1FULL, colvarxy = 1:2, colvar = "all", resolution = env.reso, run.silent.sam = TRUE))
+    occ.sp2FULL <- na.exclude(humboldt.sample.spp(dfsp = occ.sp2, colspxy = 2:3, colspkept = NULL, 
+        dfvar = env2FULL, colvarxy = 1:2, colvar = "all", resolution = env.reso, run.silent.sam = TRUE))
+    
+    occ.sp1 <- na.exclude(humboldt.sample.spp(dfsp = occ.sp1, colspxy = 2:3, colspkept = NULL, 
+        dfvar = env1, colvarxy = 1:2, colvar = "all", resolution = env.reso, run.silent.sam = run.silent))
+    occ.sp2 <- na.exclude(humboldt.sample.spp(dfsp = occ.sp2, colspxy = 2:3, colspkept = NULL, 
+        dfvar = env2, colvarxy = 1:2, colvar = "all", resolution = env.reso, run.silent.sam = run.silent))
+    
+    #################################################################################################
+    ################### row weighting and grouping factors for ade4 functions ######################
+    #################################################################################################
+    print("Converting G-space to E-space")
+    
+    # if PROJ = F
+    if (PROJ == F) {
+        row.w.1.occ <- 1 - (nrow(occ.sp1)/nrow(rbind(occ.sp1, occ.sp2)))  # prevalence of occ1
+        row.w.2.occ <- 1 - (nrow(occ.sp2)/nrow(rbind(occ.sp1, occ.sp2)))  # prevalence of occ2
+        row.w.occ <- c(rep(0, nrow(env1)), rep(0, nrow(env2)), rep(row.w.1.occ, nrow(occ.sp1)), 
+            rep(row.w.2.occ, nrow(occ.sp2)), rep(0, nrow(env1FULL)), rep(0, nrow(env2FULL)), 
+            rep(0, nrow(occ.sp1FULL)), rep(0, nrow(occ.sp2FULL)))
+        row.w.1.env <- 1 - (nrow(env1)/nrow(env12))  # prevalence of env1
+        row.w.2.env <- 1 - (nrow(env2)/nrow(env12))  # prevalence of env2
+        row.w.env <- c(rep(row.w.1.env, nrow(env1)), rep(row.w.2.env, nrow(env2)), rep(0, nrow(occ.sp1)), 
+            rep(0, nrow(occ.sp2)), rep(0, nrow(env1FULL)), rep(0, nrow(env2FULL)), rep(0, nrow(occ.sp1FULL)), 
+            rep(0, nrow(occ.sp2FULL)))
+        fac <- as.factor(c(rep(1, nrow(env1)), rep(2, nrow(env2)), rep(1, nrow(occ.sp1)), rep(2, 
+            nrow(occ.sp2))))
+    }
+    # if PROJ = T
+    if (PROJ == T) {
+        row.w.occ.PROJT <- c(rep(0, nrow(env1)), rep(0, nrow(env2)), rep(1, nrow(occ.sp1)), rep(0, 
+            nrow(occ.sp2)))
+        row.w.env.PROJT <- c(rep(1, nrow(env1)), rep(0, nrow(env2)), rep(0, nrow(occ.sp1)), rep(0, 
+            nrow(occ.sp2)))
+    }
+    # global dataset for the analysis and rows for each sub dataset
+    data.env.occ <- rbind(env1, env2, occ.sp1, occ.sp2, env1FULL, env2FULL, occ.sp1FULL, occ.sp2FULL)[e.var]
+    data.xy.occ <- rbind(env1, env2, occ.sp1, occ.sp2, env1FULL, env2FULL, occ.sp1FULL, occ.sp2FULL)[1:2]
+    # data.env2.occ<-rbind(env1,env2,occ.sp1,occ.sp2)[e.var]
+    row.env1 <- 1:nrow(env1)
+    row.env2 <- (nrow(env1) + 1):(nrow(env1) + nrow(env2))
+    row.env12 <- 1:(nrow(env1) + nrow(env2))
+    row.sp1 <- (nrow(env1) + nrow(env2) + 1):(nrow(env1) + nrow(env2) + nrow(occ.sp1))
+    row.sp2 <- (nrow(env1) + nrow(env2) + nrow(occ.sp1) + 1):(nrow(env1) + nrow(env2) + nrow(occ.sp1) + 
+        nrow(occ.sp2))
+    row.env1FULL <- (nrow(env1) + nrow(env2) + nrow(occ.sp1) + nrow(occ.sp2) + 1):(nrow(env1) + 
+        nrow(env2) + nrow(occ.sp1) + nrow(occ.sp2) + nrow(env1FULL))
+    row.env2FULL <- (nrow(env1) + nrow(env2) + nrow(occ.sp1) + nrow(occ.sp2) + nrow(env1FULL) + 
+        1):(nrow(env1) + nrow(env2) + nrow(occ.sp1) + nrow(occ.sp2) + nrow(env1FULL) + nrow(env2FULL))
+    row.sp1FULL <- (nrow(env1) + nrow(env2) + nrow(occ.sp1) + nrow(occ.sp2) + nrow(env1FULL) + 
+        nrow(env2FULL) + 1):(nrow(env1) + nrow(env2) + nrow(occ.sp1) + nrow(occ.sp2) + nrow(env1FULL) + 
+        nrow(env2FULL) + nrow(occ.sp1FULL))
+    row.sp2FULL <- (nrow(env1) + nrow(env2) + nrow(occ.sp1) + nrow(occ.sp2) + nrow(env1FULL) + 
+        nrow(env2FULL) + nrow(occ.sp1FULL) + 1):(nrow(env1) + nrow(env2) + nrow(occ.sp1) + nrow(occ.sp2) + 
+        nrow(env1FULL) + nrow(env2FULL) + nrow(occ.sp1FULL) + nrow(occ.sp2FULL))
+    #################################################################################################
+    #################################### PCA     ####################################################
+    #################################################################################################
+    # fit the PCA using occurrences from both ranges
+    if (env.pca == T & PROJ == F) {
+        row.w.IN <- row.w.env
+    }
+    if (env.pca == T & PROJ == T) {
+        # fit the PCA using occurrences from range 1
+        row.w.IN <- row.w.env.PROJT
+    }
+    if (env.pca == F & PROJ == F) {
+        # fit the PCA using occurrences from both ranges
+        row.w.IN <- row.w.occ
+    }
+    if (env.pca == F & PROJ == T) {
+        # fit the PCA using occurrences from range
+        row.w.IN <- row.w.occ.PROJT
+    }
+    
+	## choose PCs for analysis
+	if (pcx>pcy){nf.pcs=pcx}
+	if (pcx<pcy){nf.pcs=pcy}
+	if (nf.pcs>(ncol(data.env.occ))){stop(paste("***ERROR: the number of PCs you are trying to create exceeds the number of environment datasets input. Reduce PC number specified in 'pcx' or 'pcy' to a value equal or lower than ",ncol(data.env.occ)))}
+	if (pcx==pcy){stop("***ERROR: the two PCs being compared are the same PCs.  Please change one of the PCs specified in 'pcx' or 'pcy' to a different value.")}
+    ## approrpiate PCA
+    pca.cal <- dudi.pca(data.env.occ, row.w = row.w.IN, center = T, scale = T, scannf = F, nf = nf.pcs)
+    # predict the scores on the axes
+    
+    scores.env12 <- pca.cal$li[row.env12, ]
+    scores.env1 <- pca.cal$li[row.env1, ]
+    scores.env2 <- pca.cal$li[row.env2, ]
+    scores.sp1 <- pca.cal$li[row.sp1, ]
+    scores.sp2 <- pca.cal$li[row.sp2, ]
+    scores.env1FULL <- pca.cal$li[row.env1FULL, ]
+    scores.env2FULL <- pca.cal$li[row.env2FULL, ]
+    scores.sp1FULL <- pca.cal$li[row.sp1FULL, ]
+    scores.sp2FULL <- pca.cal$li[row.sp2FULL, ]
+	
+	#	store only pcs need
+    if (nf.pcs>2){
+	scores.env12 <- cbind(scores.env12[,pcx],scores.env12[,pcy])
+    scores.env1 <- cbind(scores.env1[,pcx],scores.env1[,pcy])
+    scores.env2 <- cbind(scores.env2[,pcx],scores.env2[,pcy])
+    scores.sp1 <- cbind(scores.sp1[,pcx],scores.sp1[,pcy])
+    scores.sp2 <- cbind(scores.sp2[,pcx],scores.sp2[,pcy])
+    scores.env1FULL <- cbind(scores.env1FULL[,pcx],scores.env1FULL[,pcy])
+    scores.env2FULL <- cbind(scores.env2FULL[,pcx],scores.env2FULL[,pcy])
+    scores.sp1FULL <- cbind(scores.sp1FULL[,pcx],scores.sp1FULL[,pcy])
+    scores.sp2FULL <- cbind(scores.sp2FULL[,pcx],scores.sp2FULL[,pcy])}
+
+
+    ### for analysis 
+    scores.sp1 <- cbind(scores.sp1, data.xy.occ[row.sp1, ])
+    scores.sp2 <- cbind(scores.sp2, data.xy.occ[row.sp2, ])
+    scores.env1 <- cbind(scores.env1, data.xy.occ[row.env1, ])
+    scores.env2 <- cbind(scores.env2, data.xy.occ[row.env2, ])
+    scores.sp1FULL <- cbind(scores.sp1FULL, data.xy.occ[row.sp1FULL, ])
+    scores.sp2FULL <- cbind(scores.sp2FULL, data.xy.occ[row.sp2FULL, ])
+    scores.env1FULL <- cbind(scores.env1FULL, data.xy.occ[row.env1FULL, ])
+    scores.env2FULL <- cbind(scores.env2FULL, data.xy.occ[row.env2FULL, ])
+    
+    # flag same environments
+    z3 <- humboldt.grid.espace(glob.g= scores.env1[1:2], glob.s = scores.env1[1:2], sp = scores.env1[1:2], 
+        kern.smooth = kern.smoothinZ, R = R)
+    z4 <- humboldt.grid.espace(glob.g= scores.env2[1:2], glob.s = scores.env2[1:2], sp = scores.env2[1:2], 
+        kern.smooth = kern.smoothinZ, R = R)
+    DvalClimP <- round(as.numeric(humboldt.niche.similarity(z3, z4, correct.env = F)[1]), 3)
+    if (DvalClimP > 0.97 & reduce.env == 1 & reductype == "PCA") {
+        REDUC = 3
+    }
+    if (DvalClimP > 0.97 & reduce.env == 2 & reductype == "PCA") {
+        REDUC = 4
+    }
+    AmaxPCA <- max(scores.env1[, 1])
+    BminPCA <- min(scores.env1[, 1])
+    PCAvL <- AmaxPCA - BminPCA
+    PCAvLi <- PCAvL/(R * 1)
+    
+    print("Processing of E-space")
+    col.envPCA = c(1:2)
+    if (REDUC == 3) {
+        for (i in col.envPCA) {
+            y <- i
+            AmaxPCA <- max(scores.env1[, y])
+            BminPCA <- min(scores.env1[, y])
+            CmaxPCA <- max(scores.env2[, y])
+            DminPCA <- min(scores.env2[, y])
+            XminPCA = pmin(DminPCA, BminPCA)
+            XmaxPCA = pmax(AmaxPCA, CmaxPCA)
+            scores.env2 <- scores.env2[which(scores.env2[, y] <= AmaxPCA & scores.env2[, y] >= 
+                BminPCA), ]
+            scores.sp2 <- scores.sp2[which(scores.sp2[, y] <= AmaxPCA & scores.sp2[, y] >= BminPCA), 
+                ]
+            print(paste("***PC Environment Variable:", y))
+            print("BEFORE REDUCTION")
+            print(paste("Maximum values: Environment 1", AmaxPCA, "and Environment 2", CmaxPCA))
+            print(paste("Minimum values: Environment 1", BminPCA, "and Environment 2", DminPCA))
+            Amax2PCA <- max(scores.env1[, y])
+            Bmin2PCA <- min(scores.env1[, y])
+            Cmax2PCA <- max(scores.env2[, y])
+            Dmin2PCA <- min(scores.env2[, y])
+            print(paste("AFTER REDUCTION"))
+            print(paste("Maximum values for Environment 2: ", Cmax2PCA))
+            print(paste("Minimum values for Environment 2: ", Dmin2PCA))
+            print("*******************")
+        }
+        print(paste(nrow(scores.env2FULL) - nrow(scores.env2), " sites removed from Environment 2"))
+        print(paste(nrow(scores.sp2FULL) - nrow(scores.sp2), " localties removed from Sp 2 dataset"))
+        scores.env12 <- rbind(scores.env1, scores.env2)
+        AmaxPCA <- max(scores.env1[, 1])
+        BminPCA <- min(scores.env1[, 1])
+        PCAvL <- AmaxPCA - BminPCA
+        PCAvLi <- PCAvL/(R * 1)
+    }
+    if (REDUC == 4) {
+        for (i in col.envPCA) {
+            y <- i
+            AmaxPCA <- max(scores.env1[, y])
+            BminPCA <- min(scores.env1[, y])
+            CmaxPCA <- max(scores.env2[, y])
+            DminPCA <- min(scores.env2[, y])
+            XminPCA = pmin(DminPCA, BminPCA)
+            XmaxPCA = pmax(AmaxPCA, CmaxPCA)
+            scores.env2 <- scores.env2[which(scores.env2[, y] <= AmaxPCA & scores.env2[, y] >= 
+                BminPCA), ]
+            scores.sp2 <- scores.sp2[which(scores.sp2[, y] <= AmaxPCA & scores.sp2[, y] >= BminPCA), 
+                ]
+            scores.env1 <- scores.env1[which(scores.env1[, y] <= CmaxPCA & scores.env1[, y] >= 
+                DminPCA), ]
+            scores.sp1 <- scores.sp1[which(scores.sp1[, y] <= CmaxPCA & scores.sp1[, y] >= DminPCA), 
+                ]
+            print(paste("***PC Environment Variable:", y))
+            print("BEFORE REDUCTION")
+            print(paste("Maximum values: Environment 1", AmaxPCA, "and Environment 2", CmaxPCA))
+            print(paste("Minimum values: Environment 1", BminPCA, "and Environment 2", DminPCA))
+            Amax2PCA <- max(scores.env1[, y])
+            Bmin2PCA <- min(scores.env1[, y])
+            Cmax2PCA <- max(scores.env2[, y])
+            Dmin2PCA <- min(scores.env2[, y])
+            print(paste("AFTER REDUCTION"))
+            print(paste("Maximum values for environment 1: ", Amax2PCA))
+            print(paste("Minimum values for environment 1: ", Bmin2PCA))
+            print(paste("Maximum values for environment 2: ", Cmax2PCA))
+            print(paste("Minimum values for environment 2: ", Dmin2PCA))
+            print("*******************")
+        }
+        print(paste("Step1. Reduce environmental space to max/mins of Environment 1:", nrow(scores.env2FULL) - 
+            nrow(scores.env2), " sites (from a total of", nrow(scores.env2FULL), ") removed from Environment 2"))
+        RedP1C <- nrow(scores.env2FULL) - nrow(scores.env2)
+        print(paste("Step1. Reduce environmental space to max/mins of Environment 1:", nrow(scores.sp2FULL) - 
+            nrow(scores.sp2), " localities (from a total of", nrow(scores.sp2FULL), ") removed from sp 2 dataset"))
+        RedP1sp <- nrow(scores.sp2FULL) - nrow(scores.sp2)
+        print(paste("Step1. Reduce environmental space to max/mins of Environment 2:", nrow(scores.env1FULL) - 
+            nrow(scores.env1), " sites (from a total of", nrow(scores.env1FULL), ") removed from Environment 1"))
+        RedP2C <- nrow(scores.env1FULL) - nrow(scores.env1)
+        print(paste("Step1. Reduce environmental space to max/mins of Environment 2:", nrow(scores.sp1FULL) - 
+            nrow(scores.sp1), " localities (from a total of", nrow(scores.sp1FULL), ") removed from sp 1 dataset"))
+        scores.env12 <- rbind(scores.env1, scores.env2)
+        AmaxPCA <- max(scores.env1[, 1])
+        BminPCA <- min(scores.env1[, 1])
+        PCAvL <- AmaxPCA - BminPCA
+        PCAvLi <- PCAvL/(R * 1)
+    }
+    options(warn = -1)
+    ########################################################################################
+    if (REDUC == 5) {
+        for (i in col.envPCA) {
+            y <- i
+            AmaxPCA <- max(scores.env1[, y])
+            BminPCA <- min(scores.env1[, y])
+            CmaxPCA <- max(scores.env2[, y])
+            DminPCA <- min(scores.env2[, y])
+            XminPCA <- pmin(DminPCA, BminPCA)
+            XmaxPCA <- pmax(AmaxPCA, CmaxPCA)
+            scores.env2 <- scores.env2[which(scores.env2[, y] <= AmaxPCA & scores.env2[, y] >= 
+                BminPCA), ]
+            scores.sp2 <- scores.sp2[which(scores.sp2[, y] <= AmaxPCA & scores.sp2[, y] >= BminPCA), 
+                ]
+            scores.env1 <- scores.env1[which(scores.env1[, y] <= CmaxPCA & scores.env1[, y] >= 
+                DminPCA), ]
+            scores.sp1 <- scores.sp1[which(scores.sp1[, y] <= CmaxPCA & scores.sp1[, y] >= DminPCA), 
+                ]
+            print(paste("***PC Environment Variable:", y))
+            print("BEFORE REDUCTION")
+            print(paste("Maximum values: Environment 1", AmaxPCA, "and Environment 2", CmaxPCA))
+            print(paste("Minimum values: Environment 1", BminPCA, "and Environment 2", DminPCA))
+            Amax2PCA <- max(scores.env1[, y])
+            Bmin2PCA <- min(scores.env1[, y])
+            Cmax2PCA <- max(scores.env2[, y])
+            Dmin2PCA <- min(scores.env2[, y])
+            print(paste("AFTER REDUCTION"))
+            print(paste("Maximum values for environment 1: ", Amax2PCA))
+            print(paste("Minimum values for environment 1: ", Bmin2PCA))
+            print(paste("Maximum values for environment 2: ", Cmax2PCA))
+            print(paste("Minimum values for environment 2: ", Dmin2PCA))
+            print("*******************")
+        }
+        RedP1C <- nrow(scores.env2FULL) - nrow(scores.env2)
+        RedP1sp <- nrow(scores.sp2FULL) - nrow(scores.sp2)
+        RedP2C <- nrow(scores.env1FULL) - nrow(scores.env1)
+        RedP2sp <- nrow(scores.sp1FULL) - nrow(scores.sp1)
+        RedP1Czz <- nrow(scores.env2)
+        RedP1spzz <- nrow(scores.sp2)
+        RedP2Czz <- nrow(scores.env1)
+        RedP2spzz <- nrow(scores.sp1)
+        print(paste("Step 1. Reduce environmental space to max/mins of Environment 1:", RedP1C,
+            " sites (from a total of", nrow(scores.env2FULL), ") removed from Environment 2, ", nrow(scores.env2), "sites remain."))
+        print(paste("Step 1. Reduce environmental space to max/mins of Environment 1:", RedP1sp,
+            " localities (from a total of", nrow(scores.sp2FULL), ") removed from sp 2 dataset, ", nrow(scores.sp2), "localities remain."))
+        print(paste("Step 1. Reduce environmental space to max/mins of Environment 2:", RedP2C,
+            " sites (from a total of", nrow(scores.env1FULL), ") removed from Environment 1,", nrow(scores.env1), "sites remain."))
+        print(paste("Step 1. Reduce environmental space to max/mins of Environment 2:", RedP2sp,
+            " localities (from a total of", nrow(scores.sp1FULL), ") removed from sp 1 dataset, ", nrow(scores.sp1), "localities remain."))
+
+        AmaxPCA <- max(scores.env1[, 1])
+        BminPCA <- min(scores.env1[, 1])
+        PCAvL <- AmaxPCA - BminPCA
+        PCAvLi <- PCAvL/(R * 1)
+        Rana <- seq(BminPCA, AmaxPCA, length.out = (R * 1))		
+        if(nae.window==0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env1a <- scores.env1[which(scores.env1[, 1] <= y + PCAvLi & scores.env1[, 
+                1] >= y), ]
+            Maxi <- max(scores.env1a[, 2])
+            Mini <- min(scores.env1a[, 2])
+            scores.env2a <- scores.env2[which(scores.env2[, 1] <= y + PCAvLi & scores.env2[, 
+                1] >= y), ]
+            scores.env2a <- scores.env2a[which(scores.env2a[, 2] <= Maxi & scores.env2a[, 2] >= 
+                Mini), ]
+            if (!exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- scores.env2a
+            }
+            if (exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- rbind(scores.env2a, scores.env2b)
+            }
+            scores.sp2a <- scores.sp2[which(scores.sp2[, 1] <= y + PCAvLi & scores.sp2[, 1] >= 
+                y), ]
+            scores.sp2a <- scores.sp2a[which(scores.sp2a[, 2] <= Maxi & scores.sp2a[, 2] >= Mini), 
+                ]
+            if (!exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- scores.sp2a
+            }
+            if (exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- rbind(scores.sp2a, scores.sp2b)
+            }
+        }
+        scores.sp2 <- scores.sp2b
+        rm(scores.sp2b)
+        scores.env2 <- scores.env2b
+        rm(scores.env2b)
+        }
+        if(nae.window!=0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env1a <- scores.env1[which(scores.env1[, 1] <= y + ((nae.window+1)*PCAvLi) & scores.env1[, 
+                1] >= y - ((nae.window)*PCAvLi)), ]
+            Maxi <- max(scores.env1a[, 2])
+            Mini <- min(scores.env1a[, 2])
+            scores.env2a <- scores.env2[which(scores.env2[, 1] <= y + PCAvLi & scores.env2[, 
+                1] >= y), ]
+            scores.env2a <- scores.env2a[which(scores.env2a[, 2] <= Maxi & scores.env2a[, 2] >= 
+                Mini), ]
+            if (!exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- scores.env2a
+            }
+            if (exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- rbind(scores.env2a, scores.env2b)
+            }
+            scores.sp2a <- scores.sp2[which(scores.sp2[, 1] <= y + PCAvLi & scores.sp2[, 1] >= 
+                y), ]
+            scores.sp2a <- scores.sp2a[which(scores.sp2a[, 2] <= Maxi & scores.sp2a[, 2] >= Mini), 
+                ]
+            if (!exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- scores.sp2a
+            }
+            if (exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- rbind(scores.sp2a, scores.sp2b)
+            }
+        }
+        scores.sp2 <- scores.sp2b
+        rm(scores.sp2b)
+        scores.env2 <- scores.env2b
+        rm(scores.env2b)
+        }
+		#####################################################################################################
+        AmaxPCA <- max(scores.env1[, 2])
+        BminPCA <- min(scores.env1[, 2])
+        PCAvL <- AmaxPCA - BminPCA
+        PCAvLi <- PCAvL/(R * 1)
+        Rana <- seq(BminPCA, AmaxPCA, length.out = (R * 1))		
+        if(nae.window==0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env1a <- scores.env1[which(scores.env1[, 2] <= y + PCAvLi & scores.env1[, 
+               2] >= y), ]
+            Maxi <- max(scores.env1a[, 1])
+            Mini <- min(scores.env1a[, 1])
+            scores.env2a <- scores.env2[which(scores.env2[, 2] <= y + PCAvLi & scores.env2[, 
+                2] >= y), ]
+            scores.env2a <- scores.env2a[which(scores.env2a[, 1] <= Maxi & scores.env2a[, 1] >= 
+                Mini), ]
+            if (!exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- scores.env2a
+            }
+            if (exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- rbind(scores.env2a, scores.env2b)
+            }
+            scores.sp2a <- scores.sp2[which(scores.sp2[, 2] <= y + PCAvLi & scores.sp2[, 2] >= 
+                y), ]
+            scores.sp2a <- scores.sp2a[which(scores.sp2a[, 1] <= Maxi & scores.sp2a[, 1] >= Mini), 
+                ]
+            if (!exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- scores.sp2a
+            }
+            if (exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- rbind(scores.sp2a, scores.sp2b)
+            }
+        }
+        scores.sp2 <- scores.sp2b
+        rm(scores.sp2b)
+        scores.env2 <- scores.env2b
+        rm(scores.env2b)
+        }
+        if(nae.window!=0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env1a <- scores.env1[which(scores.env1[, 2] <= y + ((nae.window+1)*PCAvLi) & scores.env1[, 
+                2] >= y - ((nae.window)*PCAvLi)), ]
+            Maxi <- max(scores.env1a[, 1])
+            Mini <- min(scores.env1a[, 1])
+            scores.env2a <- scores.env2[which(scores.env2[, 2] <= y + PCAvLi & scores.env2[, 
+                2] >= y), ]
+            scores.env2a <- scores.env2a[which(scores.env2a[, 1] <= Maxi & scores.env2a[, 1] >= 
+                Mini), ]
+            if (!exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- scores.env2a
+            }
+            if (exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- rbind(scores.env2a, scores.env2b)
+            }
+            scores.sp2a <- scores.sp2[which(scores.sp2[, 2] <= y + PCAvLi & scores.sp2[, 2] >= 
+                y), ]
+            scores.sp2a <- scores.sp2a[which(scores.sp2a[, 1] <= Maxi & scores.sp2a[, 1] >= Mini), 
+                ]
+            if (!exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- scores.sp2a
+            }
+            if (exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- rbind(scores.sp2a, scores.sp2b)
+            }
+        }
+        scores.sp2 <- scores.sp2b
+        rm(scores.sp2b)
+        scores.env2 <- scores.env2b
+        rm(scores.env2b)
+        }
+		##################################################################################################
+        print(paste("Step 2. Remove non-analogous environments:", RedP1Czz - nrow(scores.env2),
+            " sites removed from environment 2 (from a total of remaining sites ", RedP1Czz, 
+            " after Step 1),", nrow(scores.env2),"sites remain"))
+        print(paste("Step 2. Remove non-analogous environments:", RedP1spzz - nrow(scores.sp2),
+            " localities removed from sp 2 dataset (from a total of remaining sites ", RedP1spzz, 
+            " after Step 1),", nrow(scores.sp2),"localities remain"))
+        ######################################################################################################################### 
+        AmaxPCA <- max(scores.env2[, 2])
+        BminPCA <- min(scores.env2[, 2])
+        PCAvL <- AmaxPCA - BminPCA
+        PCAvLi <- PCAvL/(R * 1)
+        Rana <- seq(BminPCA, AmaxPCA, length.out = (R * 1))
+
+		
+        if(nae.window==0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env2a <- scores.env2[which(scores.env2[, 2] <= y + PCAvLi & scores.env2[, 
+                2] >= y), ]
+            Maxi <- max(scores.env2a[, 1])
+            Mini <- min(scores.env2a[, 1])
+            scores.env1a <- scores.env1[which(scores.env1[, 2] <= y + PCAvLi & scores.env1[, 
+                2] >= y), ]
+            scores.env1a <- scores.env1a[which(scores.env1a[, 1] <= Maxi & scores.env1a[, 1] >= 
+                Mini), ]
+            if (!exists("scores.env1b") & exists("scores.env1a")) {
+                scores.env1b <- scores.env1a
+            }
+            if (exists("scores.env1b") & exists("scores.env1a")) {
+                scores.env1b <- rbind(scores.env1a, scores.env1b)
+            }
+            scores.sp1a <- scores.sp1[which(scores.sp1[, 2] <= y + PCAvLi & scores.sp1[, 2] >= 
+                y), ]
+            scores.sp1a <- scores.sp1a[which(scores.sp1a[, 1] <= Maxi & scores.sp1a[, 1] >= Mini), 
+                ]
+            if (!exists("scores.sp1b") & exists("scores.sp1a")) {
+                scores.sp1b <- scores.sp1a
+            }
+            if (exists("scores.sp1b") & exists("scores.sp1a")) {
+                scores.sp1b <- rbind(scores.sp1a, scores.sp1b)
+            }
+        }
+        scores.sp1 <- scores.sp1b
+        rm(scores.sp1b)
+        scores.env1 <- scores.env1b
+        rm(scores.env1b)
+        }
+        if(nae.window!=0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env2a <- scores.env2[which(scores.env2[, 2] <= y + ((nae.window+1)*PCAvLi) & scores.env2[, 
+                2] >= y - ((nae.window)*PCAvLi)), ]
+            Maxi <- max(scores.env2a[, 1])
+            Mini <- min(scores.env2a[, 1])
+            scores.env1a <- scores.env1[which(scores.env1[, 2] <= y + PCAvLi & scores.env1[, 
+                2] >= y), ]
+            scores.env1a <- scores.env1a[which(scores.env1a[, 1] <= Maxi & scores.env1a[, 1] >= 
+                Mini), ]
+            if (!exists("scores.env1b") & exists("scores.env1a")) {
+                scores.env1b <- scores.env1a
+            }
+            if (exists("scores.env1b") & exists("scores.env1a")) {
+                scores.env1b <- rbind(scores.env1a, scores.env1b)
+            }
+            scores.sp1a <- scores.sp1[which(scores.sp1[, 2] <= y + PCAvLi & scores.sp1[, 2] >= 
+                y), ]
+            scores.sp1a <- scores.sp1a[which(scores.sp1a[, 1] <= Maxi & scores.sp1a[, 1] >= Mini), 
+                ]
+            if (!exists("scores.sp1b") & exists("scores.sp1a")) {
+                scores.sp1b <- scores.sp1a
+            }
+            if (exists("scores.sp1b") & exists("scores.sp1a")) {
+                scores.sp1b <- rbind(scores.sp1a, scores.sp1b)
+            }
+        }
+        scores.sp1 <- scores.sp1b
+        rm(scores.sp1b)
+        scores.env1 <- scores.env1b
+        rm(scores.env1b)
+        }
+        ###################################################################################################
+        AmaxPCA <- max(scores.env2[, 1])
+        BminPCA <- min(scores.env2[, 1])
+        PCAvL <- AmaxPCA - BminPCA
+        PCAvLi <- PCAvL/(R * 1)
+        Rana <- seq(BminPCA, AmaxPCA, length.out = (R * 1))
+
+		
+        if(nae.window==0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env2a <- scores.env2[which(scores.env2[, 1] <= y + PCAvLi & scores.env2[, 
+                1] >= y), ]
+            Maxi <- max(scores.env2a[, 2])
+            Mini <- min(scores.env2a[, 2])
+            scores.env1a <- scores.env1[which(scores.env1[, 1] <= y + PCAvLi & scores.env1[, 
+                1] >= y), ]
+            scores.env1a <- scores.env1a[which(scores.env1a[, 2] <= Maxi & scores.env1a[, 2] >= 
+                Mini), ]
+            if (!exists("scores.env1b") & exists("scores.env1a")) {
+                scores.env1b <- scores.env1a
+            }
+            if (exists("scores.env1b") & exists("scores.env1a")) {
+                scores.env1b <- rbind(scores.env1a, scores.env1b)
+            }
+            scores.sp1a <- scores.sp1[which(scores.sp1[, 1] <= y + PCAvLi & scores.sp1[, 1] >= 
+                y), ]
+            scores.sp1a <- scores.sp1a[which(scores.sp1a[, 2] <= Maxi & scores.sp1a[, 2] >= Mini), 
+                ]
+            if (!exists("scores.sp1b") & exists("scores.sp1a")) {
+                scores.sp1b <- scores.sp1a
+            }
+            if (exists("scores.sp1b") & exists("scores.sp1a")) {
+                scores.sp1b <- rbind(scores.sp1a, scores.sp1b)
+            }
+        }
+        scores.sp1 <- scores.sp1b
+        rm(scores.sp1b)
+        scores.env1 <- scores.env1b
+        rm(scores.env1b)
+        }
+        if(nae.window!=0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env2a <- scores.env2[which(scores.env2[, 1] <= y + ((nae.window+1)*PCAvLi) & scores.env2[, 
+                1] >= y - ((nae.window)*PCAvLi)), ]
+            Maxi <- max(scores.env2a[, 2])
+            Mini <- min(scores.env2a[, 2])
+            scores.env1a <- scores.env1[which(scores.env1[, 1] <= y + PCAvLi & scores.env1[, 
+                1] >= y), ]
+            scores.env1a <- scores.env1a[which(scores.env1a[, 2] <= Maxi & scores.env1a[, 2] >= 
+                Mini), ]
+            if (!exists("scores.env1b") & exists("scores.env1a")) {
+                scores.env1b <- scores.env1a
+            }
+            if (exists("scores.env1b") & exists("scores.env1a")) {
+                scores.env1b <- rbind(scores.env1a, scores.env1b)
+            }
+            scores.sp1a <- scores.sp1[which(scores.sp1[, 1] <= y + PCAvLi & scores.sp1[, 1] >= 
+                y), ]
+            scores.sp1a <- scores.sp1a[which(scores.sp1a[, 2] <= Maxi & scores.sp1a[, 2] >= Mini), 
+                ]
+            if (!exists("scores.sp1b") & exists("scores.sp1a")) {
+                scores.sp1b <- scores.sp1a
+            }
+            if (exists("scores.sp1b") & exists("scores.sp1a")) {
+                scores.sp1b <- rbind(scores.sp1a, scores.sp1b)
+            }
+        }
+        scores.sp1 <- scores.sp1b
+        rm(scores.sp1b)
+        scores.env1 <- scores.env1b
+        rm(scores.env1b)
+        }
+		###################################################################################################
+        print(paste("Step 2. Remove non-analogous environments:", RedP2Czz - nrow(scores.env1),
+            " sites removed from environment 1 (from a total of remaining sites ", RedP2Czz, 
+            " after Step 1),", nrow(scores.env1),"sites remain"))
+        print(paste("Step 2. Remove non-analogous environments:", RedP2spzz - nrow(scores.sp1),
+            " localities removed from sp 1 dataset (from a total of remaining sites ", RedP2spzz, 
+            " after Step 1),", nrow(scores.sp1),"localities remain"))
+        scores.env12 <- rbind(scores.env1, scores.env2)
+        env1s2.rpts<<-nrow(scores.env1); sp1s2.rpts<<-nrow(scores.sp1);env2s2.rpts<<-nrow(scores.env2); sp2s2.rpts<<-nrow(scores.sp2)
+        # print(nrow(scores.env12))
+        if (env1s2.rpts  == 0 | env2s2.rpts  == 0 | sp1s2.rpts  == 0 | sp2s2.rpts == 0) {
+            print("*****************************************************************")
+            print("*****************************************************************")
+            print("*****************************************************************")
+			#print(env1s2.rpts)
+			#print(env2s2.rpts)
+			#print(sp1s2.rpts)
+			#print(sp2s2.rpts)
+            if (env1s2.rpts == 0){print("!!!!!No sites remain in evironment 1!!!!!")}
+            if (env2s2.rpts == 0){print("!!!!!No sites remain in evironment 2!!!!!")}
+            if (sp1s2.rpts == 0){print("!!!!!No localities remain for species 1!!!!!")}
+            if (sp2s2.rpts == 0){print("!!!!!No localities remain for species 2!!!!!")}
+            print("*****************************************************************")
+            print("*****************************************************************")
+            print("*****************************************************************")
+            print("The Niche Divergence Test (NDT) is only possible if some portion of the distributions exist in shared accessible environmental-space. In this analysis there exists no shared E-space between the two taxa.  This occurs if the two species’ distributions do not overlap in shared available E-space, or if one of the species' distribution only occurs in non-analogous climates. In this situation, we recommend that your report the following:")
+            print("No analogous environments exist between two taxa. The absence of shared accessible analogous climates is strong evidence of niche divergence. This is supported by low niche similarity values (INPUT OBSERVED VALUE HERE FROM NOT) and significant difference obesrved in the Niche Overalp Test (INPUT P-VALUE OUTPUT FROM EQUIVALeNCE TEST).")
+            print("If reporting these results in a table, I sugest that you insert a symbol (for example '''**''') and then clarify in the table heading that this symbol indicates strong support for niche divergence and an equivalent interpretation to a significant NDT")
+            print("FINE PRINT: this message can be trigged by other errors (e.g., environmental data and species data are not properly setup), we always recommend performing a NOT with similar parameters to ensure this message is in-fact a result of the phenomena described above.")
+            print("*****************************************************************")
+            print("*****************************************************************")
+            print("*****************************************************************")
+            if(exists('inname')){print(paste0("Results file output as: ", inname, "_NDT_output.txt"))} else {inname=Sys.time()}
+            inname<-gsub(":","_",inname);inname<-gsub(" ", "_", inname)
+            fileConn<-file(paste0(inname ,"_NDT_output.txt"))
+            if (env1s2.rpts == 0){writeLines(c("!!!!!No sites remain in evironment 1!!!!!"), fileConn)}
+            if (env2s2.rpts == 0){writeLines(c("!!!!!No sites remain in evironment 2!!!!!"), fileConn)}
+            if (sp1s2.rpts == 0){writeLines(c("!!!!!No localities remain for species 1!!!!!"), fileConn)}
+            if (sp2s2.rpts == 0){writeLines(c("!!!!!No localities remain for species 2!!!!!"), fileConn)}
+            writeLines(c("The Niche Divergence Test (NDT) is only possible if some portion of the distributions exist in shared accessible environmental-space. In this analysis there exists no shared E-space between the two taxa.   This occurs if the two species’ distributions do not overlap in shared available E-space, or if one of the species' distribution only occurs in non-analogous climates. In this situation, we recommend that your report the following: No analogous environments exist between two taxa. The absence of shared accessible analogous climates is strong evidence of niche divergence. This is supported by low niche similarity values (INPUT OBSERVED VALUE HERE FROM NOT) and significant difference obesrved in the Niche Overalp Test (INPUT P-VALUE OUTPUT FROM EQUIVALeNCE TEST).  If reporting these results in a table, I sugest that you insert a symbol (for example '''**''') and then clarify in the table heading that this symbol indicates strong support for niche divergence and an equivalent interpretation to a significant NDT"), fileConn)
+            close(fileConn)
+            stop("Function stopped deliberately- a NDT is not possible - read above text for explanation")}
+    }
+    if (REDUC == 6) {
+        for (i in col.envPCA) {
+            
+            y <- i
+            AmaxPCA <- max(scores.env1[, y])
+            BminPCA <- min(scores.env1[, y])
+            CmaxPCA <- max(scores.env2[, y])
+            DminPCA <- min(scores.env2[, y])
+            XminPCA <- pmin(DminPCA, BminPCA)
+            XmaxPCA <- pmax(AmaxPCA, CmaxPCA)
+            scores.env2 <- scores.env2[which(scores.env2[, y] <= AmaxPCA & scores.env2[, y] >= 
+                BminPCA), ]
+            scores.sp2 <- scores.sp2[which(scores.sp2[, y] <= AmaxPCA & scores.sp2[, y] >= BminPCA), 
+                ]
+            print(paste("***PC Environment Variable:", y))
+            print("BEFORE REDUCTION")
+            print(paste("Maximum values: Environment 1", AmaxPCA, "and Environment 2", CmaxPCA))
+            print(paste("Minimum values: Environment 1", BminPCA, "and Environment 2", DminPCA))
+            Amax2PCA <- max(scores.env1[, y])
+            Bmin2PCA <- min(scores.env1[, y])
+            Cmax2PCA <- max(scores.env2[, y])
+            Dmin2PCA <- min(scores.env2[, y])
+            print(paste("AFTER REDUCTION"))
+            print(paste("Maximum values for environment 2: ", Cmax2PCA))
+            print(paste("Minimum values for environment 2: ", Dmin2PCA))
+            print("*******************")
+        }
+        print(paste("Step1. Reduce environmental space to max/mins of Environment 1:", nrow(scores.env2FULL) - 
+            nrow(scores.env2), " sites (from a total of", nrow(scores.env2FULL), ") removed from Environment 2"))
+        RedP1C <- nrow(scores.env2FULL) - nrow(scores.env2)
+        print(paste("Step1. Reduce environmental space to max/mins of Environment 1:", nrow(scores.sp2FULL) - 
+            nrow(scores.sp2), " localities (from a total of", nrow(scores.sp2FULL), ") removed from sp 2 dataset"))
+        RedP1sp <- nrow(scores.sp2FULL) - nrow(scores.sp2)
+        AmaxPCA <- max(scores.env1[, 1])
+        BminPCA <- min(scores.env1[, 1])
+        PCAvL <- AmaxPCA - BminPCA
+        PCAvLi <- PCAvL/(R * 1)
+        Rana <- seq(BminPCA, AmaxPCA, length.out = (R * 1))
+		
+        if(nae.window==0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env1a <- scores.env1[which(scores.env1[, 1] <= y + PCAvLi & scores.env1[, 
+                1] >= y), ]
+            Maxi <- max(scores.env1a[, 2])
+            Mini <- min(scores.env1a[, 2])
+            scores.env2a <- scores.env2[which(scores.env2[, 1] <= y + PCAvLi & scores.env2[, 
+                1] >= y), ]
+            scores.env2a <- scores.env2a[which(scores.env2a[, 2] <= Maxi & scores.env2a[, 2] >= 
+                Mini), ]
+            if (!exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- scores.env2a
+            }
+            if (exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- rbind(scores.env2a, scores.env2b)
+            }
+            scores.sp2a <- scores.sp2[which(scores.sp2[, 1] <= y + PCAvLi & scores.sp2[, 1] >= 
+                y), ]
+            scores.sp2a <- scores.sp2a[which(scores.sp2a[, 2] <= Maxi & scores.sp2a[, 2] >= Mini), 
+                ]
+            if (!exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- scores.sp2a
+            }
+            if (exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- rbind(scores.sp2a, scores.sp2b)
+            }
+        }
+        scores.sp2 <- scores.sp2b
+        rm(scores.sp2b)
+        scores.env2 <- scores.env2b
+        rm(scores.env2b)
+        }
+        if(nae.window!=0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env1a <- scores.env1[which(scores.env1[, 1] <= y + ((nae.window+1)*PCAvLi) & scores.env1[, 
+                1] >= y - ((nae.window)*PCAvLi)), ]
+            Maxi <- max(scores.env1a[, 2])
+            Mini <- min(scores.env1a[, 2])
+            scores.env2a <- scores.env2[which(scores.env2[, 1] <= y + PCAvLi & scores.env2[, 
+                1] >= y), ]
+            scores.env2a <- scores.env2a[which(scores.env2a[, 2] <= Maxi & scores.env2a[, 2] >= 
+                Mini), ]
+            if (!exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- scores.env2a
+            }
+            if (exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- rbind(scores.env2a, scores.env2b)
+            }
+            scores.sp2a <- scores.sp2[which(scores.sp2[, 1] <= y + PCAvLi & scores.sp2[, 1] >= 
+                y), ]
+            scores.sp2a <- scores.sp2a[which(scores.sp2a[, 2] <= Maxi & scores.sp2a[, 2] >= Mini), 
+                ]
+            if (!exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- scores.sp2a
+            }
+            if (exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- rbind(scores.sp2a, scores.sp2b)
+            }
+        }
+        scores.sp2 <- scores.sp2b
+        rm(scores.sp2b)
+        scores.env2 <- scores.env2b
+        rm(scores.env2b)
+        }
+		#####################################################################################################
+        AmaxPCA <- max(scores.env1[, 2])
+        BminPCA <- min(scores.env1[, 2])
+        PCAvL <- AmaxPCA - BminPCA
+        PCAvLi <- PCAvL/(R * 1)
+        Rana <- seq(BminPCA, AmaxPCA, length.out = (R * 1))		
+        if(nae.window==0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env1a <- scores.env1[which(scores.env1[, 2] <= y + PCAvLi & scores.env1[, 
+               2] >= y), ]
+            Maxi <- max(scores.env1a[, 1])
+            Mini <- min(scores.env1a[, 1])
+            scores.env2a <- scores.env2[which(scores.env2[, 2] <= y + PCAvLi & scores.env2[, 
+                2] >= y), ]
+            scores.env2a <- scores.env2a[which(scores.env2a[, 1] <= Maxi & scores.env2a[, 1] >= 
+                Mini), ]
+            if (!exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- scores.env2a
+            }
+            if (exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- rbind(scores.env2a, scores.env2b)
+            }
+            scores.sp2a <- scores.sp2[which(scores.sp2[, 2] <= y + PCAvLi & scores.sp2[, 2] >= 
+                y), ]
+            scores.sp2a <- scores.sp2a[which(scores.sp2a[, 1] <= Maxi & scores.sp2a[, 1] >= Mini), 
+                ]
+            if (!exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- scores.sp2a
+            }
+            if (exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- rbind(scores.sp2a, scores.sp2b)
+            }
+        }
+        scores.sp2 <- scores.sp2b
+        rm(scores.sp2b)
+        scores.env2 <- scores.env2b
+        rm(scores.env2b)
+        }
+        if(nae.window!=0){
+        for (i in Rana) {
+            y <- i
+            # scores.env2b <- scores.env2c
+            scores.env1a <- scores.env1[which(scores.env1[, 2] <= y + ((nae.window+1)*PCAvLi) & scores.env1[, 
+                2] >= y - ((nae.window)*PCAvLi)), ]
+            Maxi <- max(scores.env1a[, 1])
+            Mini <- min(scores.env1a[, 1])
+            scores.env2a <- scores.env2[which(scores.env2[, 2] <= y + PCAvLi & scores.env2[, 
+                2] >= y), ]
+            scores.env2a <- scores.env2a[which(scores.env2a[, 1] <= Maxi & scores.env2a[, 1] >= 
+                Mini), ]
+            if (!exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- scores.env2a
+            }
+            if (exists("scores.env2b") & exists("scores.env2a")) {
+                scores.env2b <- rbind(scores.env2a, scores.env2b)
+            }
+            scores.sp2a <- scores.sp2[which(scores.sp2[, 2] <= y + PCAvLi & scores.sp2[, 2] >= 
+                y), ]
+            scores.sp2a <- scores.sp2a[which(scores.sp2a[, 1] <= Maxi & scores.sp2a[, 1] >= Mini), 
+                ]
+            if (!exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- scores.sp2a
+            }
+            if (exists("scores.sp2b") & exists("scores.sp2a")) {
+                scores.sp2b <- rbind(scores.sp2a, scores.sp2b)
+            }
+        }
+        scores.sp2 <- scores.sp2b
+        rm(scores.sp2b)
+        scores.env2 <- scores.env2b
+        rm(scores.env2b)
+        }
+		##################################################################################################
+        print(paste("Step 2. Remove non-analogous environments:", nrow(scores.env2FULL) - nrow(scores.env2) - 
+            RedP1C, " sites removed from environment 2 (from a total of remaining sites", nrow(scores.env2FULL) - nrow(scores.env2), 
+            ", after Step 1)"))
+        print(paste("Step 2. Remove non-analogous environments:", nrow(scores.sp2FULL) - nrow(scores.sp2) - 
+            RedP1sp, " localities removed from sp 2 dataset (from a total of remaining sites", nrow(scores.sp2FULL) - nrow(scores.sp2), 
+            ", after Step 1)"))
+        scores.env12 <- rbind(scores.env1, scores.env2)
+        ## recreate background after adjustments
+    }
+    # print(REDUC)
+    RedP1C <- nrow(scores.env2FULL) - nrow(scores.env2)
+    RedP1sp <- nrow(scores.sp2FULL) - nrow(scores.sp2)
+    RedP2C <- nrow(scores.env1FULL) - nrow(scores.env1)
+    RedP2sp <- nrow(scores.sp1FULL) - nrow(scores.sp1)
+    
+    # scores.env12<- rbind(scores.env1,scores.env2)
+    options(warn = 0)
+    l$env1 <- env1
+    l$env2 <- env2
+    l$occ.sp1 <- occ.sp1
+    l$occ.sp2 <- occ.sp2
+    l$row.env1 <- row.env1
+    l$row.env2 <- row.env2
+    l$row.env12 <- row.env12
+    l$row.sp1 <- row.sp1
+    l$row.sp2 <- row.sp2
+    l$row.env1FULL <- row.env1FULL
+    l$row.env2FULL <- row.env2FULL
+    l$row.sp1FULL <- row.sp1FULL
+    l$row.sp2FULL <- row.sp2FULL
+    l$pca.cal <- pca.cal
+    l$scores.env12 <- scores.env12
+    l$scores.env1 <- scores.env1
+    l$scores.env2 <- scores.env2
+    l$scores.sp1 <- scores.sp1
+    l$scores.sp2 <- scores.sp2
+    l$scores.env1FULL <- scores.env1FULL
+    l$scores.env2FULL <- scores.env2FULL
+    l$scores.sp1FULL <- scores.sp1FULL
+    l$scores.sp2FULL <- scores.sp2FULL
+    l$DvalClimP <- DvalClimP
+    l$RedP1C <- RedP2C
+    l$RedP1sp <- RedP2sp
+    l$RedP2C <- RedP1C
+    l$RedP2sp <- RedP1sp
+    l$AmaxPCA <- AmaxPCA
+    l$BminPCA <- BminPCA
+    l$PCAvL <- PCAvL
+    l$PCAvLi <- PCAvLi
+    l$env.reso<-env.reso
+	l$kern.smooth<-kern.smoothinZ
+	l$R<-R
+    invisible(l)
+}
+
+```
+
+
+
+
+## humboldt.grid.espace()
+```{r}
+humboldt.grid.espace <- function(glob.g, glob.s, sp, R = 100, kern.smooth = 1) {
+    if (kern.smooth == "auto") {
+        Kern.SmZ <- "href"
+        Kern.SmZZ <- 0.5
+    }
+    if (kern.smooth != "auto") {
+        Kern.SmZ <- 0.03 * kern.smooth
+        Kern.SmZZ <- 20 * Kern.SmZ
+    }
+    # glob.g: global background dataset for the whole study area, glob.s: background for sp1 sp:
+    # occurrence dataset R: resolution of the grid
+    glob.g<- as.matrix(glob.g)
+    glob.s <- as.matrix(glob.s)
+    sp <- as.matrix(sp)
+    
+    th.sp = 0
+    th.env = 0
+    l <- list()
+    
+    if (ncol(glob.g) > 2) 
+        stop("cannot calculate overlap with more than two axes")
+    if (ncol(glob.g) == 1) 
+        stop("cannot calculate overlap on one axes")
+    
+    if (ncol(glob.g) == 2) {
+        # if scores in two dimensions (e.g. PCA)
+        xmin <- min(glob.g[, 1] - Kern.SmZZ)
+        xmax <- max(glob.g[, 1] + Kern.SmZZ)
+        ymin <- min(glob.g[, 2] - Kern.SmZZ)
+        ymax <- max(glob.g[, 2] + Kern.SmZZ)  # data preparation\t
+        glob.sr <- data.frame(cbind((glob.s[, 1] - xmin)/abs(xmax - xmin), (glob.s[, 2] - ymin)/abs(ymax - 
+            ymin)))
+        spr <- data.frame(cbind((sp[, 1] - xmin)/abs(xmax - xmin), (sp[, 2] - ymin)/abs(ymax - 
+            ymin)))
+        mask <- ascgen(SpatialPoints(cbind((1:R)/R, (1:R)/R)), nrcol = R - 2, count = FALSE)
+        sp.dens <- kernelUD(SpatialPoints(spr[, 1:2]), h = Kern.SmZ, grid = mask, kern = "bivnorm")
+        
+        # using the raster function here from "raster" and not "terra"
+        sp.dens <- raster(xmn = xmin, xmx = xmax, ymn = ymin, ymx = ymax, matrix(sp.dens$ud, 
+            nrow = R))
+        
+        glob.s.dens <- kernelUD(SpatialPoints(glob.sr[, 1:2]), grid = mask, kern = "bivnorm")
+        
+        
+        # using the raster function here from "raster" and not "terra"
+        glob.s.dens <- raster(xmn = xmin, xmx = xmax, ymn = ymin, ymx = ymax, matrix(glob.s.dens$ud, 
+            nrow = R))
+        x <- seq(from = min(glob.g[, 1]), to = max(glob.g[, 1]), length.out = R)
+        y <- seq(from = min(glob.g[, 2]), to = max(glob.g[, 2]), length.out = R)
+        glob.sr <- extract(glob.s.dens, glob.s)
+        Z.th <- quantile(glob.sr, th.env)
+        glob.s.dens[glob.s.dens < Z.th] <- 0
+        Z <- glob.s.dens * nrow(glob.s)/cellStats(glob.s.dens, "sum")
+        spr <- extract(sp.dens, sp)
+        z.th <- quantile(spr, th.sp)
+        sp.dens[Z == 0] <- 0
+        sp.dens[sp.dens < z.th] <- 0
+        z <- sp.dens * nrow(sp)/cellStats(sp.dens, "sum")
+        z.uncor <- z/cellStats(z, "max")
+        z.cor <- z/Z
+        z.cor[is.na(z.cor)] <- 0
+        z.cor <- z.cor/cellStats(z.cor, "max")
+        Z2 <- matrix(Z, nrow = R, ncol = R, byrow = F)
+        z.cor2 <- matrix(z.cor, nrow = R, ncol = R, byrow = F)
+        z.uncor2 <- matrix(z.uncor, nrow = R, ncol = R, byrow = F)
+        #store values
+        l$x <- x
+        l$y <- y
+        l$z.uncor <- z.uncor2
+        l$z.cor <- z.cor2
+        l$Z <- Z2
+        l$glob.g<- glob.g
+        l$glob.s <- glob.s
+        l$sp <- sp
+        l$z.uncor.raster <- z.uncor
+        l$z.cor.raster <- z.cor
+        l$Z.raster <- Z
+        }
+    return(l)	#as.matrix(Z@data@values,nrow=R,ncol=R,byrow=F)as.matrix(z.cor@data@values)as.matrix(z.uncor@data@values)
+}
+
+
+```
+
+
+
+
+## humboldt.niche.similarity
+
+```{r}
+humboldt.niche.similarity <- function(z1, z2, correct.env = F, nae = "NO", thresh.espace.z = 0.001) {
+    R <- length(z1$x)
+    l <- list()
+    
+    z1a <- z1
+    z2a <- z2
+    z2a$Z[z2a$Z < thresh.espace.z] <- 0
+    z1a$Z[z1a$Z < thresh.espace.z] <- 0
+    z2a$Z[z2a$Z >= thresh.espace.z] <- 1
+    z1a$Z[z1a$Z >= thresh.espace.z] <- 1
+    za.sum <- z1a$Z + z2a$Z
+    za.sum[za.sum > 0] <- 1
+    za.sum.ci <- sum(za.sum)
+    za.sum.mask <- z1a$Z + z2a$Z
+    za.sum.mask[za.sum.mask <= 1] <- 0
+    za.sum.mask[za.sum.mask > 1] <- 1
+    za.sum.cf <- sum(za.sum.mask)
+    
+    if (nae == "NO" & correct.env == F) {
+        z1$z.uncor[za.sum.mask == 0] <- 0
+        z2$z.uncor[za.sum.mask == 0] <- 0
+        Clc <- round(100 * (za.sum.cf/za.sum.ci), 2)
+    }
+    if (nae == "NO" & correct.env == T) {
+        z1$z.cor[za.sum.mask == 0] <- 0
+        z2$z.cor[za.sum.mask == 0] <- 0
+        Clc <- round(100 * (za.sum.cf/za.sum.ci), 2)
+    }
+    if (nae == "YES") {
+        Clc <- 100
+    }
+    
+    if (correct.env == F) {
+        z1$z.uncor[z1$z.uncor < thresh.espace.z] <- 0
+        z2$z.uncor[z2$z.uncor < thresh.espace.z] <- 0
+        p1 <- z1$z.uncor/sum(z1$z.uncor)  # rescale occurrence densities so that the sum of densities is the same for both species
+        p2 <- z2$z.uncor/sum(z2$z.uncor)  # rescale occurrence densities so that the sum of densities is the same for both species
+    }
+    
+    if (correct.env == T) {
+        z1$z.cor[z1$z.cor < thresh.espace.z] <- 0
+        z2$z.cor[z2$z.cor < thresh.espace.z] <- 0
+        p1 <- z1$z.cor/sum(z1$z.cor)  # rescale occurrence densities so that the sum of densities is the same for both species
+        p2 <- z2$z.cor/sum(z2$z.cor)  # rescale occurrence densities so that the sum of densities is the same for both species
+    }
+    
+    D <- 1 - (0.5 * (sum(abs(p1 - p2))))  # overlap metric D
+    Diff.I <- sqrt(sum((sqrt(p1) - sqrt(p2))^2))
+    I <- 1 - (Diff.I^2)/2  # overlap metric I
+    l$D <- D
+    l$I <- I
+    l$remaining.espace.per <- Clc
+    l$num.cells.analog.espace <- za.sum.cf
+    l$num.cells.total.espace <- za.sum.ci
+    l$mask.analog.e <- za.sum.mask
+    l$mask.total.e <- za.sum
+    
+    #change to spatraster
+    mask.analog.e.raster <- raster(matrix(za.sum.mask, nrow = R))
+    crs(mask.analog.e.raster) <- crs(z1$Z.raster)
+    extent(mask.analog.e.raster) <- extent(z1$Z.raster)
+    l$mask.analog.e.raster <- mask.analog.e.raster
+    mask.total.e.raster <- raster(matrix(za.sum, nrow = R))
+    crs(mask.total.e.raster) <- crs(z1$Z.raster)
+    extent(mask.total.e.raster) <- extent(z1$Z.raster)
+    l$mask.total.e.raster <- mask.total.e.raster
+    z1.raster <- raster(matrix(p1, nrow = R))
+    crs(z1.raster) <- crs(z1$Z.raster)
+    extent(z1.raster) <- extent(z1$Z.raster)
+    l$z1.raster <- z1.raster
+    z2.raster <- raster(matrix(p2, nrow = R))
+    crs(z2.raster) <- crs(z1$Z.raster)
+    extent(z2.raster) <- extent(z1$Z.raster)
+    l$z2.raster <- z2.raster
+    
+    return(l)
+}
+
+
+```
+# testing
+
+
+```{r}
+
+
+env2<-read.delim("../data-raw/env2.txt",h=T,sep="\t") 
+#' 
+# remove NAs and make sure all variables are imported as numbers
+env1<-humboldt.scrub.env(env1)
+env2<-humboldt.scrub.env(env2)
+#'
+#' ##load occurrence sites for the species at study area 1 (env1). Column names should be 'sp', 'x','y'
+occ.sp1<-na.exclude(read.delim("../data-raw/sp1.txt",h=T,sep="\t"))
+#'
+#' ##load occurrence sites for the species at study area 2 (env2). Column names should be 'sp', 'x','y'. 
+occ.sp2<-na.exclude(read.delim("../data-raw/sp2.txt",h=T,sep="\t"))
+```
+
+
+```{r}
+#' 
+#' ##its highly recommened that you using the function "humboldt.top.env" to select only the important enviromnetal variables. This step can be skipped. If you downloaded tons of environmental data, you should use this step.  If you skip this step, input env1/env2 inplace of reduc.vars$env1/reduc.vars$env2 
+reduc.vars<- humboldt.top.env(env1=env1,env2=env2,sp1=occ.sp1,sp2=occ.sp2,rarefy.dist=40, rarefy.units="km", env.reso=0.416669,learning.rt1=0.01,learning.rt2=0.01,e.var=(3:21),pa.ratio=4,steps1=50,steps2=50,method="contrib",contrib.greater=5)
+#' 
+#' ##Adjust the number of variables input for e.vars after reduction to only important variables
+num.var.e<-ncol(reduc.vars$env1)
+#'
+```
+
+
+
+```{r}
+#' ##convert geographic space to espace for measuring pnt.index
+zz<-humboldt.g2e(env1=reduc.vars$env1, env2=reduc.vars$env2, sp1=occ.sp1, sp2=occ.sp2, reduce.env = 0, reductype = "PCA", non.analogous.environments = "YES", env.trim= T, e.var=c(3:num.var.e),  col.env = e.var, trim.buffer.sp1 = 200, trim.buffer.sp2 = 200, rarefy.dist = 50, rarefy.units="km", env.reso=0.41666669, kern.smooth = 1, R = 100, run.silent = F)
+#' 
+#' ##store espace scores for sp1 and environments 1,2 and both environments combined output from humboldt.g2e
+scores.env1<-zz$scores.env1[1:2]
+scores.env2<-zz$scores.env2[1:2]
+scores.env12<- rbind(zz$scores.env1[1:2],zz$scores.env2[1:2])
+scores.sp1<-zz$scores.sp1[1:2]
+scores.sp2<-zz$scores.sp2[1:2]
+#' 
+#' ## estimate the Potential Niche Truncation Index
+pnt1<- humboldt.pnt.index(scores.env12,scores.env1,scores.sp1,kern.smooth=1,R=100)
+#' pnt2<- humboldt.pnt.index(scores.env12,scores.env2,scores.sp2,kern.smooth=1,R=100)
+
+```
