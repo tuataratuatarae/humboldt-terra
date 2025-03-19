@@ -132,17 +132,20 @@ humboldt.pnt.index <- function(glob.g, glob.s, sp, R = 100, kern.smooth = 1) {
            ps1 = Polygons(list(p),1)
            if (i ==1) {sBsp = SpatialPolygons(list(ps1))}
            if (i !=1) {sBsp = SpatialPolygons(list(ps1))+sBsp}
-           }
-        sBsp=gUnaryUnion(sBsp)
-        sBenv=gUnaryUnion(sBenv)
+        }
+        #swapping 'rgeos:gUnaryUnion' for 'terra::union'
+        sBsp=terra::union(sBsp)
+        sBenv=terra::union(sBenv)
         sBf=sBsp+sBenv
-        borders = gDifference(
+        #swapping 'rgeos::gdifference' for 'terra::intersect'
+        borders = terra::intersect(
            as(sBf,"SpatialLines"),
            
            #modifying this code to be with sf
            #as(gUnaryUnion(sBf),"SpatialLines"),
-           as(st_union(sBf),"SpatialLines"),
-           byid=TRUE)
+           as(terra::union(sBf),"SpatialLines")#,
+           #byid=TRUE
+           )
         bordersL<-lengthLine(borders)
         bordersF<-lengthLine(sBsp)
         nborders=length(borders)
@@ -1729,9 +1732,11 @@ humboldt.niche.similarity <- function(z1, z2, correct.env = F, nae = "NO", thres
 
 
 ```
+
+
 # testing
 
-
+## general data cleaning & loading
 ```{r}
 
 
@@ -1760,6 +1765,8 @@ num.var.e<-ncol(reduc.vars$env1)
 ```
 
 
+## testing for potential niche truncation
+
 
 ```{r}
 #' ##convert geographic space to espace for measuring pnt.index
@@ -1774,6 +1781,60 @@ scores.sp2<-zz$scores.sp2[1:2]
 #' 
 #' ## estimate the Potential Niche Truncation Index
 pnt1<- humboldt.pnt.index(scores.env12,scores.env1,scores.sp1,kern.smooth=1,R=100)
-#' pnt2<- humboldt.pnt.index(scores.env12,scores.env2,scores.sp2,kern.smooth=1,R=100)
+pnt2<- humboldt.pnt.index(scores.env12,scores.env2,scores.sp2,kern.smooth=1,R=100)
 
+```
+
+## testing for niche differentiation
+
+
+```{r}
+#' ##merge environment files
+env12<-rbind(env1,env2)
+
+
+ ##row weighting of environment density for PCA
+row.w.1.env<-1-(nrow(env1)/nrow(env12))  # prevalence of env1
+row.w.2.env<-1-(nrow(env2)/nrow(env12))  # prevalence of env2
+row.w.env <-base::c(rep(row.w.1.env, nrow(env1)),rep(row.w.2.env, nrow(env2)),rep(0, nrow(occ.sp1)),rep(0, nrow(occ.sp2)))
+#'
+#' ##create a global dataset with all environments and species, include environmental variables e.var[x1-xN]
+e.var<-c(3:21)
+
+# nc - I dont understand how/why the authors are trying to include specie in this data frame esp since there are diff numbers of observations in the environmental and corresponding species frames, so I am just creating this file with the environmental data
+## data.env.occ<-rbind(env1,env2,occ.sp1,occ.sp2)[e.var]
+data.env.occ = rbind(env1, env2)[e.var]
+
+
+```
+
+
+```{r}
+#' ##perform PCA of environment and species 1 data which is weighted by density of environment types in both environment 1 and environment 2
+pca.cal <-dudi.pca(data.env.occ,row.w = row.w.env, center = T, scale = T, scannf = F, nf = 2)
+
+
+#'
+#' ##store PCA scores for sp1 andenvironments 1,2 and both environments combined
+#' ## specific exact locations of environment and sp. data in PCA for storage
+#' row.env1<-1:nrow(env1)
+#' row.env2<-(nrow(env1)+1):(nrow(env1)+nrow(env2))
+#' row.env12<-1:(nrow(env1)+nrow(env2))
+#' row.sp1<-(nrow(env1)+nrow(env2)+1):(nrow(env1)+nrow(env2)+nrow(occ.sp1))
+#' row.sp2<-(nrow(env1)+nrow(env2)+nrow(occ.sp1)+1):(nrow(env1)+nrow(env2)+nrow(occ.sp1)+nrow(occ.sp2))
+#' ##glob.g: global background dataset for the whole study area 
+#' glob.g<- pca.cal$li[row.env12,]
+#' ##glob.s: background for sp1
+#' glob.s<- pca.cal$li[row.env1,]
+#' ##glob2: background for sp2
+#' glob.s2<- pca.cal$li[row.env2,]
+#' ##sp1: occurrence dataset
+#' sp1<- pca.cal$li[row.sp1,]
+#' ##sp2: occurrence dataset
+#' sp2<- pca.cal$li[row.sp2,]
+#'
+#' ## run Create a grid of Environmental Space Function
+#' z1<- humboldt.grid.espace(glob.g,glob.s,sp1,R=100,kern.smooth=1)
+#' z2<- humboldt.grid.espace(glob.g,glob.s2,sp2,R=100,kern.smooth=1)
+#' humboldt.niche.similarity(z1,z2,correct.env=F)
 ```
