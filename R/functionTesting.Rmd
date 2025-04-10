@@ -133,19 +133,17 @@ humboldt.pnt.index <- function(glob.g, glob.s, sp, R = 100, kern.smooth = 1) {
            if (i ==1) {sBsp = SpatialPolygons(list(ps1))}
            if (i !=1) {sBsp = SpatialPolygons(list(ps1))+sBsp}
         }
-        #swapping 'rgeos:gUnaryUnion' for 'terra::union'
-        sBsp=terra::union(sBsp)
-        sBenv=terra::union(sBenv)
+        #swapping 'rgeos:gUnaryUnion' for 'sp::rbind'
+        sBsp=as(sf::st_union(st_as_sf(sBsp)), "Spatial")
+        sBenv=as(sf::st_union(st_as_sf(sBenv)), "Spatial")
         sBf=sBsp+sBenv
-        #swapping 'rgeos::gdifference' for 'terra::intersect'
-        borders = terra::intersect(
-           as(sBf,"SpatialLines"),
+        #swapping 'rgeos::gdifference' for 'sf::st_difference'
+       borders = as(as(st_as_sf(sf::st_difference(st_as_sf(sBf),
            
            #modifying this code to be with sf
-           #as(gUnaryUnion(sBf),"SpatialLines"),
-           as(terra::union(sBf),"SpatialLines")#,
-           #byid=TRUE
-           )
+           sf::st_union(st_as_sf(sBf))
+       )), "Spatial"), "SpatialLines")
+        # borders = as(vect(st_union(st_as_sf(vect(sBsp)), st_as_sf(vect(sBenv)))), "Spatial")
         bordersL<-lengthLine(borders)
         bordersF<-lengthLine(sBsp)
         nborders=length(borders)
@@ -177,6 +175,10 @@ humboldt.pnt.index <- function(glob.g, glob.s, sp, R = 100, kern.smooth = 1) {
 }
 
 ```
+
+
+
+
 
 ## humboldt.occ.rarefy()
 ```{r}
@@ -1647,8 +1649,49 @@ humboldt.grid.espace <- function(glob.g, glob.s, sp, R = 100, kern.smooth = 1) {
 ```
 
 
+## humboldt.color
+```{r}
+humboldt.color <- function(col=1){
+	#ORDER:1.base, 2.plasma, 3.viridia, 4.l17, 5.r3, 6. b&w
+	l <- list()
+
+	if (col == 1) {
+		#	base - pure		
+		colr.o <- colorRampPalette(c("#000099", "#00FEFF", "#45FE4F", "#FCFF00", "#FF9400", "#FF3100"))(256)
+		}
+ 
+	if (col == 2) {
+		#plasma - pure
+		colr.o<- c("#000000", "#000C7D", "#000D7E", "#000D80", "#000E82", "#000E84", "#000E86", "#000F87", "#000F89", "#00108B", "#00108C", "#00118E", "#001190", "#001191", "#001293", "#001294", "#001296", "#001397", "#001399", "#00139A", "#00149B", "#00149D", "#00149E", "#00149F", "#0015A0", "#0015A1", "#0015A2", "#0015A3", "#0015A4", "#0015A5", "#0016A6", "#0016A7", "#0016A7", "#0016A8", "#0016A9", "#0016A9", "#0016A9", "#0A16AA", "#1516AA", "#1D15AA", "#2315AA", "#2915AA", "#2F15A9", "#3414A9", "#3914A8", "#3E13A7", "#4313A6", "#4712A5", "#4C12A4", "#5011A3", "#5311A2", "#5710A1", "#5A0FA0", "#5E0F9F", "#610E9F", "#640E9E", "#670D9D", "#6A0D9C", "#6C0C9B", "#6F0B9A", "#720B99", "#740A99", "#770A98", "#790997", "#7C0897", "#7E0896", "#800795", "#820795", "#850694", "#870693", "#890693", "#8B0592", "#8D0592", "#8F0491", "#910491", "#930490", "#950390", "#97038F", "#99038F", "#9B028E", "#9D028E", "#9F028E", "#A1018D", "#A3018D", "#A5018C", "#A7018C", "#A9008B", "#AB008B", "#AC008A", "#AE008A", "#B00089", "#B20089", "#B40088", "#B60088", "#B80087", "#B90087", "#BB0087", "#BD0086", "#BF0086", "#C10085", "#C30085", "#C40084", "#C60084", "#C80083", "#CA0083", "#CC0082", "#CE0082", "#CF0081", "#D10081", "#D30080", "#D50080", "#D6007F", "#D8007F", "#DA007E", "#DB007E", "#DD007D", "#DE007C", "#E0017C", "#E2027B", "#E3047B", "#E5067A", "#E6087A", "#E80B79", "#E90D78", "#EA1078", "#EC1277", "#ED1477", "#EE1676", "#F01875", "#F11A75", "#F21C74", "#F41E73", "#F52073", "#F62272", "#F72471", "#F82671", "#F92870", "#FB2A6F", "#FC2C6F", "#FD2E6E", "#FE306D", "#FF326C", "#FF346C", "#FF366B", "#FF386A", "#FF3A6A", "#FF3D69", "#FF3F68", "#FF4167", "#FF4366", "#FF4566", "#FF4765", "#FF4964", "#FF4B63", "#FF4D62", "#FF5062", "#FF5261", "#FF5460", "#FF565F", "#FF585E", "#FF5A5D", "#FF5D5C", "#FF5F5B", "#FF615B", "#FF635A", "#FF6559", "#FF6758", "#FF6A57", "#FF6C56", "#FF6E55", "#FF7054", "#FF7253", "#FF7452", "#FF7651", "#FF7850", "#FF7A4E", "#FF7C4D", "#FF7E4C", "#FF7F4B", "#FF814A", "#FF8349", "#FF8548", "#FF8747", "#FF8845", "#FF8A44", "#FF8C43", "#FF8E42", "#FF8F40", "#FF913F", "#FF933E", "#FF953C", "#FF963B", "#FF9839", "#FF9A38", "#FF9B36", "#FF9D35", "#FF9F33", "#FFA032", "#FFA230", "#FFA32F", "#FFA52E", "#FFA62C", "#FFA82B", "#FFA92A", "#FFAB29", "#FFAC28", "#FFAE27", "#FFAF26", "#FFB126", "#FFB225", "#FFB424", "#FFB523", "#FFB623", "#FFB822", "#FFB922", "#FFBB21", "#FFBC20", "#FFBD20", "#FFBF1F", "#FFC01F", "#FFC21F", "#FFC31E", "#FFC41E", "#FFC61E", "#FFC71D", "#FFC81D", "#FFCA1D", "#FFCB1D", "#FFCC1D", "#FFCE1D", "#FFCF1C", "#FFD01C", "#FFD21C", "#FFD31C", "#FFD41C", "#FFD61C", "#FFD71D", "#FFD81D", "#FFDA1D", "#FFDB1D", "#FFDC1D", "#FFDE1D", "#FFDF1E", "#FFE01E", "#FFE21E", "#FFE31E", "#FFE41F", "#FFE61F", "#FFE71F", "#FFE820", "#FFE920", "#FFEB21", "#FFEC21", "#FFED22", "#FFEF22", "#FFF123")
+		}
+
+	if (col == 3) {
+		#viridis - pure
+		colr.o <- colorRampPalette(c("#440154", "#440154ff", "#440558ff", "#450a5cff", "#450e60ff", "#451465ff", "#461969ff", "#461d6dff", "#462372ff", "#472775ff", "#472c7aff", "#46307cff", "#45337dff", "#433880ff", "#423c81ff", "#404184ff", "#3f4686ff", "#3d4a88ff", "#3c4f8aff", "#3b518bff", "#39558bff", "#37598cff", "#365c8cff", "#34608cff", "#33638dff", "#31678dff", "#2f6b8dff", "#2d6e8eff", "#2c718eff", "#2b748eff", "#29788eff", "#287c8eff", "#277f8eff", "#25848dff", "#24878dff", "#238b8dff", "#218f8dff", "#21918dff", "#22958bff", "#23988aff", "#239b89ff", "#249f87ff", "#25a186ff", "#25a584ff", "#26a883ff", "#27ab82ff", "#29ae80ff", "#2eb17dff", "#35b479ff", "#3cb875ff", "#42bb72ff", "#49be6eff", "#4ec16bff", "#55c467ff", "#5cc863ff", "#61c960ff", "#6bcc5aff", "#72ce55ff", "#7cd04fff", "#85d349ff", "#8dd544ff", "#97d73eff", "#9ed93aff", "#a8db34ff", "#b0dd31ff", "#b8de30ff", "#c3df2eff", "#cbe02dff", "#d6e22bff", "#e1e329ff", "#eae428ff", "#f5e626ff", "#fde725ff")) (256)
+		}
+
+if (col == 4) {
+		#l17 white and pure
+		colr.o<- colorRampPalette(c("#FFFFFF", "#FFFEFC", "#FEFDF9", "#FEFDF7", "#FDFCF4", "#FDFBF1", "#FCFAEE", "#FCFAEB", "#FBF9E9", "#FAF7E3", "#FAF7E0", "#F9F6DD", "#F8F5DB", "#F8F4D8", "#F7F3D5", "#F7F3D2", "#F6F2CF", "#F6F1CD", "#F4F0C7", "#F4EFC4", "#F3EEC2", "#F2EDBF", "#F2ECBD", "#F2EBBB", "#F2EABA", "#F2E9B8", "#F3E8B6", "#F3E6B3", "#F3E5B1", "#F3E4AF", "#F3E3AE", "#F3E2AC", "#F3E1AA", "#F3E0A9", "#F2DFA7", "#F2DEA5", "#F2DCA2", "#F2DBA0", "#F2DA9F", "#F2D99D", "#F2D79C", "#F2D69A", "#F2D598", "#F2D497", "#F2D396", "#F2D193", "#F3D092", "#F3CF91", "#F3CD90", "#F3CC8E", "#F3CB8D", "#F3CA8C", "#F3C98B", "#F3C688", "#F4C587", "#F4C486", "#F4C385", "#F4C284", "#F4C183", "#F4BF81", "#F4BE80", "#F4BD7F", "#F4BB7D", "#F4BA7C", "#F4B87B", "#F4B77A", "#F4B67A", "#F5B579", "#F5B378", "#F5B277", "#F5B177", "#F5AE75", "#F5AD75", "#F5AC74", "#F5AB73", "#F5AA73", "#F5A872", "#F5A771", "#F5A670", "#F5A470", "#F5A26E", "#F5A16E", "#F59F6D", "#F59E6C", "#F59D6C", "#F59C6C", "#F59A6B", "#F5996B", "#F5986B", "#F5956A", "#F5946A", "#F5936A", "#F5916A", "#F5906A", "#F48F69", "#F48D69", "#F48C69", "#F48A69", "#F48868", "#F48768", "#F48668", "#F48468", "#F38367", "#F38167", "#F38067", "#F37F67", "#F27C67", "#F27B67", "#F27A68", "#F27868", "#F17768", "#F17668", "#F17468", "#F07368", "#F07269", "#EF6F69", "#EF6E69", "#EF6C69", "#EE6B6A", "#EE6A6A", "#EE686A", "#ED676A", "#ED666A", "#ED646A", "#EC616B", "#EC606B", "#EB5F6B", "#EA5D6C", "#EA5C6C", "#E95B6D", "#E85A6D", "#E8586E", "#E7576E", "#E6556F", "#E5536F", "#E55270", "#E45170", "#E34F71", "#E34E71", "#E24D72", "#E14B72", "#E04973", "#E04773", "#DF4674", "#DE4474", "#DE4375", "#DD4175", "#DC4075", "#DB3F76", "#DA3E77", "#D83C78", "#D73B79", "#D63A79", "#D5397A", "#D4377A", "#D3367B", "#D2357C", "#D1347C", "#D0337D", "#CE307E", "#CD2F7F", "#CC2E7F", "#CB2D80", "#CA2B80", "#C92A81", "#C82982", "#C72882", "#C52683", "#C32584", "#C12485", "#C02385", "#BE2386", "#BD2287", "#BC2287", "#BA2188", "#B92089", "#B72089", "#B41F8B", "#B31E8B", "#B11D8C", "#B01D8C", "#AE1C8D", "#AD1C8E", "#AB1B8E", "#AA1B8F", "#A71990", "#A51991", "#A31892", "#A21892", "#A01893", "#9E1993", "#9C1994", "#9A1A94", "#981A95", "#941B96", "#921B97", "#901B97", "#8E1C98", "#8C1C99", "#891C99", "#871D9A", "#851D9A", "#831D9B", "#7F1E9C", "#7C1E9D", "#7A1E9D", "#781E9E", "#751F9E", "#731F9F", "#701F9F", "#6E20A0", "#6B21A0", "#6522A1", "#6223A1", "#5F23A2", "#5C24A2", "#5924A2", "#5525A3", "#5225A3", "#4E26A3", "#4B26A4", "#4327A4", "#3E27A5", "#3A28A5", "#3428A6", "#2F29A6", "#2929A6", "#2129A7", "#182AA7", "#002AA8"))(256)
+		}
+	
+
+	if (col == 5) {
+	# r3 - pure	
+	colr.o<-colorRampPalette(c("#085CF8", "#0F5FF4", "#1361F1", "#1763ED", "#1965E9", "#1B67E5", "#1C6AE1", "#1D6CDE", "#1D6EDA", "#1D72D2", "#1D74CE", "#1C75CB", "#1B77C7", "#1979C3", "#187BBF", "#167DBB", "#147EB8", "#1380B4", "#1283AC", "#1385A8", "#1486A4", "#1788A0", "#1A899C", "#1D8A98", "#208C93", "#238D8F", "#278E8B", "#2D9082", "#2F927E", "#329379", "#349475", "#359570", "#37966C", "#389767", "#399862", "#3A9A5E", "#3B9C54", "#3B9D50", "#3C9E4B", "#3C9F46", "#3CA042", "#3DA13D", "#3DA239", "#3EA335", "#3FA431", "#42A62B", "#44A728", "#47A826", "#49A824", "#4CA922", "#4EAA21", "#51AA20", "#54AB20", "#5AAC1F", "#5CAD1E", "#5FAE1E", "#62AE1E", "#65AF1E", "#67AF1D", "#6AB01D", "#6CB11D", "#6FB11D", "#74B21D", "#77B31C", "#79B41C", "#7BB41C", "#7EB51C", "#80B51B", "#83B61B", "#85B61B", "#87B71B", "#8CB81A", "#8EB91A", "#91B91A", "#93BA1A", "#95BA19", "#97BB19", "#9ABB19", "#9CBC19", "#9EBD18", "#A3BE18", "#A5BE18", "#A7BF17", "#A9BF17", "#ABC017", "#AEC016", "#B0C116", "#B2C116", "#B4C215", "#B8C315", "#BBC314", "#BDC414", "#BFC514", "#C1C513", "#C3C613", "#C5C613", "#C7C712", "#CCC812", "#CEC811", "#D0C911", "#D2C910", "#D4CA10", "#D6CA0F", "#D8CB0F", "#DBCB0E", "#DDCB0E", "#E1CC0E", "#E3CD0E", "#E5CD0E", "#E7CD0F", "#E9CE10", "#EBCE12", "#EDCE14", "#EFCD16", "#F1CD19", "#F4CC1F", "#F6CB23", "#F7CA26", "#F8C929", "#F9C82D", "#F9C730", "#FAC633", "#FAC536", "#FBC339", "#FCC03F", "#FCBF41", "#FCBE44", "#FCBC46", "#FCBB48", "#FDB94B", "#FDB84D", "#FDB64F", "#FDB551", "#FDB255", "#FEB057", "#FEAF59", "#FEAD5B", "#FEAC5D", "#FEAA5F", "#FEA961", "#FEA763", "#FEA466", "#FEA368", "#FEA16A", "#FEA06C", "#FF9E6D", "#FF9D6F", "#FF9B71", "#FF9A72", "#FF9874", "#FF9577", "#FF9379", "#FF927A", "#FF907C", "#FF8F7D", "#FF8D7F", "#FE8B80", "#FE8A82", "#FE8884", "#FE8587", "#FE8388", "#FE818A", "#FE808B", "#FE7E8C", "#FE7C8E", "#FE7A8F", "#FD7991", "#FD7792", "#FD7395", "#FD7197", "#FD7098", "#FD6E99", "#FC6C9B", "#FC6A9C", "#FC689E", "#FC669F", "#FC64A0", "#FB60A3", "#FB5EA4", "#FB5CA5", "#FA5AA6", "#FA58A7", "#FA56A8", "#FA54A8", "#F952A8", "#F94EA7", "#F84CA6", "#F84AA5", "#F849A3", "#F747A1", "#F7469E", "#F7449C", "#F64399", "#F64296", "#F53F8F", "#F53E8C", "#F43D88", "#F43C85", "#F33A82", "#F3397E", "#F2387B", "#F13778", "#F13674", "#F0336D", "#EF326A", "#EE3167", "#EE2F63", "#ED2E60", "#EC2D5D", "#EB2C59", "#EB2A56", "#EA2953", "#E8264C", "#E82549", "#E72445", "#E62242", "#E5213F", "#E4203B", "#E31E38", "#E21D35", "#E21B31", "#E0182A", "#DF1626", "#DE1423", "#DD131F", "#DC111B", "#DB0F17", "#DA0C12", "#D90A0C", "#D70500"))(256)
+		}
 
 
+	#white to black
+	if (col == 6) {
+		colr.o <- colorRampPalette(c("#FFFFFF", "#404040", "#000000"))(256)
+		}
+	l <-colr.o
+	return(l)
+}
+
+
+```
 ## humboldt.niche.similarity
 
 ```{r}
@@ -1733,6 +1776,430 @@ humboldt.niche.similarity <- function(z1, z2, correct.env = F, nae = "NO", thres
 
 ```
 
+## humboldt.all.except.pnt
+```{r}
+
+
+humboldt.all.except.pnt <- function(inname = "DoItAll", env1, env2, sp1, sp2, rarefy.dist = 0, rarefy.units = "dd", env.reso, 
+    reduce.env = 2, reductype = "PCA", non.analogous.environments = "NO", nae.window=5, env.trim= T, env.trim.type="MCP", trim.mask1, trim.mask2, trim.buffer.sp1 = 200, trim.buffer.sp2 = 200, 
+    color.ramp=1, correct.env = T, pcx=1, pcy=2, col.env = e.var, e.var, R = 100, kern.smooth = 1, 
+    e.reps = 100, b.reps = 100, b.force.equal.sample=F, nae = "YES", 
+    thresh.espace.z = 0.0001, p.overlap = T, p.boxplot = F, p.scatter = F, run.silent = F, ncores=1) {
+    
+    l <- list()
+    inname<<-inname
+	######################### store global params
+	colr.o<-humboldt.color(col=color.ramp)
+    cores.n<-ncores
+	if (ncores == "ALL"){ncores = "All"}
+	if (ncores == "all"){ncores = "All"}
+	#################################################################################################
+    #################################### Gspace to Espace ###########################################
+    #################################################################################################
+    zz <<- humboldt.g2e(env1, env2, sp1, sp2, reduce.env, reductype, non.analogous.environments, nae.window,
+        env.trim, e.var, col.env = e.var,env.trim.type, trim.mask1, trim.mask2, trim.buffer.sp1, trim.buffer.sp2, pcx=pcx, pcy=pcy, rarefy.dist,rarefy.units, env.reso, kern.smooth, R, run.silent = run.silent)
+    ##################################################################################################
+    ############################# plots of PCA and Espace ############################################
+    ############################# ####################################################################
+    ptlss1 <- nrow(zz$scores.sp1)/nrow(zz$scores.sp1FULL)
+    ptlss2 <- nrow(zz$scores.sp2)/nrow(zz$scores.sp2FULL)
+    if (reduce.env != 0 & ptlss1 > 0.5 & nrow(zz$scores.sp2) < 10) {
+        print(paste("Only ", nrow(zz$scores.sp2), " points remain in species dataset 2. In this analysis, it is recommended to not trim shared e-space or remove non-analogous climates because input habitats are too divergent.  Basically input environments are non-equivalent and have little e-space overlap relevant to species 2. Because e-space cannot be reduced to shared/non-analogous environments: report shared analogos space percentage, niche similarity values and equivalence statistic significance for full climate space (see below for correct.env parameter recommendations)"))
+    }
+    if (reduce.env != 0 & ptlss2 > 0.5 & nrow(zz$scores.sp1) < 10) {
+        print(paste("Only ", nrow(zfz$scores.sp1), " points remain in species dataset 1. In this analysis, it is recommended to not trim shared e-space or remove non-analogous climates because input habitats are too divergent.  Basically input environments are non-equivalent and have little e-space overlap relevant to species 1. Because e-space cannot be reduced to shared/non-analogous environments: report shared analogos space percentage, niche similarity values and equivalence statistic significance for full climate space (see below for correct.env parameter recommendations)"))
+    }
+    
+    threshinZ <- thresh.espace.z
+    nacinZ <- nae
+    kern.smoothinZ <- kern.smooth
+    Rin <- R
+    scores.env12 <- rbind(zz$scores.env1, zz$scores.env2)
+    scores.env1a <- zz$scores.env1
+    scores.env2a <- zz$scores.env2
+    scores.env12a <- scores.env12
+    scores.sp1a <- zz$scores.sp1
+    scores.sp2a <- zz$scores.sp2
+    #scores.env1a$Axis2 <- (scores.env1a$Axis2 )
+    #scores.env2a$Axis2 <- (scores.env2a$Axis2 )
+    #scores.env12a$Axis2 <- (scores.env12a$Axis2 )
+    #scores.sp1a$Axis2 <- (scores.sp1a$Axis2 )
+    #scores.sp2a$Axis2 <- (scores.sp2a$Axis2 )
+    # calculation of occurrence density and test of niche equivalency and Background
+    z1 <- humboldt.grid.espace(scores.env12a[1:2], scores.env1a[1:2], scores.env1a[1:2], kern.smooth = kern.smoothinZ, 
+        R = Rin)
+    z2 <- humboldt.grid.espace(scores.env12a[1:2], scores.env2a[1:2], scores.env2a[1:2], kern.smooth = kern.smoothinZ, 
+        R = Rin)
+    z3 <- humboldt.grid.espace(scores.env1a[1:2], scores.env1a[1:2], scores.env1a[1:2], kern.smooth = kern.smoothinZ, 
+        R = Rin)
+    z4 <- humboldt.grid.espace(scores.env2a[1:2], scores.env2a[1:2], scores.env2a[1:2], kern.smooth = kern.smoothinZ, 
+        R = Rin)
+    z5 <- humboldt.grid.espace(scores.env12a[1:2], scores.env1a[1:2], scores.sp1a[1:2], kern.smooth = kern.smoothinZ, 
+        R = Rin)
+    z6 <- humboldt.grid.espace(scores.env12a[1:2], scores.env2a[1:2], scores.sp2a[1:2], kern.smooth = kern.smoothinZ, 
+        R = Rin)   
+    ## cacluate environment overlaps for adjusted Dvalues
+    DvalClim <- round(as.numeric(humboldt.niche.similarity(z3, z4, correct.env = F, nae = "YES", 
+        thresh.espace.z = threshinZ)[1]), 3)
+    pdf(file = paste(inname, "_ENV.pdf", sep = ""))  # create a pdf file named from the names of the 2 species
+    layout(matrix(c(1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 4, 4, 3, 3, 4, 4), 4, 4, byrow = TRUE))
+    humboldt.plot.niche(z1, correct.env = F, title = "E-space Environment 1", color.ramp= color.ramp, name.axis1 = paste("PC",pcx, sep = ""), 
+        name.axis2 = paste("PC",pcy, sep = ""))
+    humboldt.plot.niche(z2, correct.env = F, title = "E-space Environment 2", color.ramp= color.ramp, name.axis1 = paste("PC",pcx, sep = ""), 
+        name.axis2 = paste("PC",pcy, sep = ""))
+    ## measure differences
+    ee <- humboldt.espace.correction(Z.env1 = z1, Z.env2 = z2, Z.sp1 = z5, Z.sp2 = z6)
+    ## stop if differences are highly correlated if(ee$D.overlap.uncorrected>0.5 &
+    ## correct.env==F){stop('Analysis stopped. In this situation, it is best to change
+    ## 'correct.env=F' to 'correct.env=T'. Please change this and rerun to proceed.')}
+    if (correct.env == T) {
+        print("Just so you know, you input: 'correct.env=T'")
+    }
+    # plot Differences
+    
+    humboldt.plot.espace.diff(espace.diff = ee, correct.env = F, pcx=pcx, pcy=pcy, type = "environment")
+    if (ee$e.uncor.sum != 0) {
+        contour(z1$x, (sort((z1$y ))), z1$Z, add = T, levels = quantile(z1$Z[z1$Z > 0], c(0.1, 
+            0.5, 0.75)), drawlabels = F, lty = c(1, 2, 3), lwd = c(1, 1, 1), col = "grey")
+    }
+    humboldt.plot.contrib(zz$pca.cal$co, pcx=pcx, pcy=pcy, zz$pca.cal$eig)
+    
+    dev.off()
+    pdf(file = paste(inname, "_ENV2.pdf", sep = ""))  # create a pdf file named from the names of the 2 species
+    layout(matrix(c(1, 2, 3, 4), 2, 2, byrow = TRUE))
+    AmaxF <- max(zz$scores.env1FULL[, 1])
+    AminF <- min(zz$scores.env1FULL[, 1])
+    BmaxF <- max(zz$scores.env2FULL[, 1])
+    BminF <- min(zz$scores.env2FULL[, 1])
+    CmaxF <- max(zz$scores.env1FULL[, 2])
+    CminF <- min(zz$scores.env1FULL[, 2])
+    DmaxF <- max(zz$scores.env2FULL[, 2])
+    DminF <- min(zz$scores.env2FULL[, 2])
+    Xmin1 = pmin(AminF, BminF)
+    Xmax1 = pmax(AmaxF, BmaxF)
+    Ymin1 = pmin(CminF, DminF)
+    Ymax1 = pmax(CmaxF, DmaxF)
+    
+    AmaxFG <- max(zz$scores.env1FULL[, 3])
+    AminFG <- min(zz$scores.env1FULL[, 3])
+    BmaxFG <- max(zz$scores.env2FULL[, 3])
+    BminFG <- min(zz$scores.env2FULL[, 3])
+    CmaxFG <- max(zz$scores.env1FULL[, 4])
+    CminFG <- min(zz$scores.env1FULL[, 4])
+    DmaxFG <- max(zz$scores.env2FULL[, 4])
+    DminFG <- min(zz$scores.env2FULL[, 4])
+    
+    ### plot scatter plots of environment before and after
+    plot(zz$scores.env1FULL[1:2], col = "light grey", xlim = c(Xmin1, Xmax1), ylim = c(Ymin1, 
+        Ymax1), main = "E-space Environment 1", xlab = paste("PC",pcx, sep = ""), ylab = paste("PC",pcy, sep = ""), pch = 20, cex.sub = 0.75, 
+        cex = 0.3, sub = (paste("Removed:", zz$RedP1C, "sites of", nrow(zz$scores.env1FULL[1:2]), 
+            "(", round((100 * zz$RedP1C/nrow(zz$scores.env1FULL[1:2])), 1), "%);", zz$RedP1sp, 
+            "locs of", nrow(zz$scores.sp1FULL[1:2]), "(", round((100 * zz$RedP1sp/nrow(zz$scores.sp1FULL[1:2])), 
+                1), "%)")))
+    points(zz$scores.env1[1:2], pch = 19, cex = 0.3)
+    points(zz$scores.sp1FULL[1:2], pch = 19, col = "blue", cex = 0.3)
+    points(zz$scores.sp1[1:2], pch = 19, col = "red", cex = 0.3)
+    rect(min(zz$scores.env2[, 1], zz$scores.env1[, 1]), min(zz$scores.env2[, 2], zz$scores.env1[, 
+        2]), max(zz$scores.env2[, 1], zz$scores.env1[, 1]), max(zz$scores.env2[, 2], zz$scores.env1[, 
+        2]), density = NULL, angle = 45, col = NA, border = NULL, lty = par("lty"), lwd = par("lwd"))
+    plot(zz$scores.env2FULL[1:2], col = "light grey", xlim = c(Xmin1, Xmax1), ylim = c(Ymin1, 
+        Ymax1), main = "E-space Environment 2", xlab = paste("PC",pcx, sep = ""), ylab = paste("PC",pcy, sep = ""), pch = 20, cex.sub = 0.75, 
+        cex = 0.3, sub = (paste("Removed:", zz$RedP2C, "sites of", nrow(zz$scores.env2FULL[1:2]), 
+            "(", round((100 * zz$RedP2C/nrow(zz$scores.env2FULL[1:2])), 1), "%);", zz$RedP2sp, 
+            "locs of", nrow(zz$scores.sp2FULL[1:2]), "(", round((100 * zz$RedP2sp/nrow(zz$scores.sp2FULL[1:2])), 
+                1), "%)")))
+    points(zz$scores.env2[1:2], pch = 19, cex = 0.3)
+    points(zz$scores.sp2FULL[1:2], pch = 19, col = "blue", cex = 0.3)
+    points(zz$scores.sp2[1:2], pch = 19, col = "red", cex = 0.3)
+    rect(min(zz$scores.env2[, 1], zz$scores.env1[, 1]), min(zz$scores.env2[, 2], zz$scores.env1[, 
+        2]), max(zz$scores.env2[, 1], zz$scores.env1[, 1]), max(zz$scores.env2[, 2], zz$scores.env1[, 
+        2]), density = NULL, angle = 45, col = NA, border = NULL, lty = par("lty"), lwd = par("lwd"))
+    
+    plot(zz$scores.env1FULL[3:4], col = "light grey", xlim = c(AminFG, AmaxFG), ylim = c(CminFG, 
+        CmaxFG), main = "G-space Environment 1", xlab = "Longitude", ylab = "Latitude", pch = 20, 
+        cex.sub = 0.75, cex = 0.3, sub = (paste("Removed:", zz$RedP1C, "sites of", nrow(zz$scores.env1FULL[3:4]), 
+            "(", round((100 * zz$RedP1C/nrow(zz$scores.env1FULL[3:4])), 1), "%);", zz$RedP1sp, 
+            "locs of", nrow(zz$scores.sp1FULL[3:4]), "(", round((100 * zz$RedP1sp/nrow(zz$scores.sp1FULL[3:4])), 
+                1), "%)")))
+    points(zz$scores.env1[3:4], pch = 19, cex = 0.3)
+    points(zz$scores.sp1FULL[3:4], pch = 19, col = "blue", cex = 0.3)
+    points(zz$scores.sp1[3:4], pch = 19, col = "red", cex = 0.3)
+    plot(zz$scores.env2FULL[3:4], col = "light grey", xlim = c(BminFG, BmaxFG), ylim = c(DminFG, 
+        DmaxFG), main = "G-space Environment 2", xlab = "Longitude", ylab = "Latitude", pch = 20, 
+        cex.sub = 0.75, cex = 0.3, sub = (paste("Removed:", zz$RedP2C, "sites of", nrow(zz$scores.env2FULL[3:4]), 
+            "(", round((100 * zz$RedP2C/nrow(zz$scores.env2FULL[3:4])), 1), "%);", zz$RedP2sp, 
+            "locs of", nrow(zz$scores.sp2FULL[3:4]), "(", round((100 * zz$RedP2sp/nrow(zz$scores.sp2FULL[3:4])), 
+                1), "%)")))
+    points(zz$scores.env2[3:4], pch = 19, cex = 0.3)
+    points(zz$scores.sp2FULL[3:4], pch = 19, col = "blue", cex = 0.3)
+    points(zz$scores.sp2[3:4], pch = 19, col = "red", cex = 0.3)
+    
+    dev.off()
+    ### plot of espace on geospace
+    pdf(file = paste(inname, "_ENV3.pdf", sep = ""))  # create a pdf file named from the names of the 2 species
+    layout(matrix(c(1, 2, 3, 4), 2, 2, byrow = TRUE))
+    par(mar = c(2.5, 4, 2.5, 2.5))
+    options(warn = -1)
+    n.env1 <- 1:nrow(zz$scores.env1)
+    n.env2 <- (nrow(zz$scores.env1) + 1):(nrow(zz$scores.env1) + nrow(zz$scores.env2))
+    env12 <- rbind(zz$scores.env1, zz$scores.env2)
+    Z1 <- env12[, 1]
+    Z2 <- env12[, 2]
+    X <- env12[, 3]
+    Y <- env12[, 4]
+    df <- data.frame(X, Y, Z1, Z2)
+    rangeMin <- min(df[, 3])
+    rangeMax <- max(df[, 3])
+    rangeEnv <- (rangeMax - rangeMin)/256
+    rangeEnvL <- (rangeMax - rangeMin)
+    rangeBreaks <- seq(rangeMin, rangeMax, rangeEnv)
+    r.range <- c(rangeMin, rangeMax)
+    div.r.range <- rangeEnvL/5
+    df <- df[n.env1, ]
+    r3 <- raster(res = env.reso, xmn = min(df[, 1]), xmx = max(df[, 1]), ymn = min(df[, 2]), 
+        ymx = max(df[, 2]))
+    cols <- colr.o
+    cells <- cellFromXY(r3, df[, 1:2])
+    r3[cells] <- df[, 3]
+    plot(r3, col = cols, cex.axis = 0.6, legend = FALSE, breaks = rangeBreaks)
+    plot(r3, legend.only = TRUE, col = cols, legend.width = 1, legend.shrink = 0.5, axis.args = list(at = seq(r.range[1], 
+        r.range[2], div.r.range), labels = round(seq(r.range[1], r.range[2], div.r.range), 1), 
+        cex.axis = 0.6), legend.args = list(text = paste("PC",pcx, sep = ""), side = 4, font = 2, line = 2.5, cex = 0.8))
+    
+    df <- data.frame(X, Y, Z1, Z2)
+    df <- df[n.env2, ]
+    r4 <- raster(res = env.reso, xmn = min(df[, 1]), xmx = max(df[, 1]), ymn = min(df[, 2]), 
+        ymx = max(df[, 2]))
+    cols <- colr.o
+    cells <- cellFromXY(r4, df[, 1:2])
+    r4[cells] <- df[, 3]
+    plot(r4, col = cols, cex.axis = 0.6, legend = FALSE, breaks = rangeBreaks)
+    
+    df <- data.frame(X, Y, Z1, Z2)
+    rangeMin <- min(df[, 4])
+    rangeMax <- max(df[, 4])
+    rangeEnv <- (rangeMax - rangeMin)/256
+    rangeEnvL <- (rangeMax - rangeMin)
+    rangeBreaks <- seq(rangeMin, rangeMax, rangeEnv)
+    r.range <- c(rangeMin, rangeMax)
+    div.r.range <- rangeEnvL/5
+    df <- df[n.env1, ]
+    r1 <- raster(res = env.reso, xmn = min(df[, 1]), xmx = max(df[, 1]), ymn = min(df[, 2]), 
+        ymx = max(df[, 2]))
+    cols <- colr.o
+    cells <- cellFromXY(r1, df[, 1:2])
+    r1[cells] <- df[, 4]
+    plot(r1, col = cols, cex.axis = 0.6, legend = FALSE, breaks = rangeBreaks)
+    plot(r1, legend.only = TRUE, col = cols, legend.width = 1, legend.shrink = 0.5, axis.args = list(at = seq(r.range[1], 
+        r.range[2], div.r.range), labels = round(seq(r.range[1], r.range[2], div.r.range), 1), 
+        cex.axis = 0.6), legend.args = list(text = paste("PC",pcy, sep = ""), side = 4, font = 2, line = 2.5, cex = 0.8))
+    
+    df <- data.frame(X, Y, Z1, Z2)
+    df <- df[n.env2, ]
+    r2 <- raster(res = env.reso, xmn = min(df[, 1]), xmx = max(df[, 1]), ymn = min(df[, 2]), 
+        ymx = max(df[, 2]))
+    cols <- colr.o
+    cells <- cellFromXY(r2, df[, 1:2])
+    r2[cells] <- df[, 4]
+    plot(r2, col = cols, cex.axis = 0.6, legend = FALSE, breaks = rangeBreaks)
+    mtext("E-space plotted in G-space", side = 3, line = -2, outer = TRUE)
+    options(warn = 0)
+    dev.off()
+    
+    ###############################################################
+    # calculation of occurrence density and test of niche equivalency and background
+    a <- humboldt.equivalence.stat(z5, z6, rep = e.reps, correct.env = correct.env, nae = nacinZ, 
+        kern.smooth = kern.smoothinZ, run.silent.equ = run.silent, ncores=cores.n)  # test of niche equivalency and background according to Warren et al. 2008
+    b <- humboldt.background.stat(g2e = zz, correct.env = correct.env, env.reso = env.reso, sim.dir = 1, 
+        rep = b.reps, kern.smooth = kern.smoothinZ, R = Rin, force.equal.sampl=b.force.equal.sample, run.silent.bak = run.silent, ncores=cores.n)
+    b2 <- humboldt.background.stat(g2e = zz, correct.env = correct.env, env.reso = env.reso, 
+        sim.dir = 2, rep = b.reps, kern.smooth = kern.smoothinZ, R = Rin, force.equal.sampl=b.force.equal.sample, run.silent.bak = run.silent, ncores=cores.n)
+    ###############################################################
+   
+    ################################################################ 
+    pdf(file = paste(inname, "_SPP.pdf", sep = ""))  # create a pdf file named from the names of the 2 species
+    layout(matrix(c(1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 4, 5, 3, 3, 6, 7), 4, 4, byrow = TRUE))
+    humboldt.plot.niche(z5, title = "E-space Species 1", color.ramp= color.ramp, name.axis1 = paste("PC",pcx,", ",pnt1R, sep = ""), name.axis2 = paste("PC",pcy, sep = ""), correct.env = F)
+    humboldt.plot.niche(z6, title = "E-space Species 2", color.ramp= color.ramp, name.axis1 = paste("PC",pcx,", ",pnt2R, sep = ""), name.axis2 = paste("PC",pcy, sep = ""), 
+        correct.env = F)
+    # humboldt.plot.contrib(zz$pca.cal$co,zz$pca.cal$eig) plot difference
+    humboldt.plot.espace.diff(espace.diff = ee, correct.env = F, type = "species", pcx=pcx,pcy=pcy)
+    
+    if (ee$s.uncor.sum != 0) {
+        contour(z5$x, (sort((z5$y ))), z5$Z, add = T, levels = quantile(z5$Z[z5$Z > 0], c(0.1, 
+            0.5, 0.75)), drawlabels = F, lty = c(1, 2, 3), lwd = c(1, 1, 1), col = "grey")
+    }
+    if (ee$s.uncor.sum == 0) {
+        contour(z5$x, (sort((z5$y ))), z5$Z, add = T, levels = quantile(z5$Z[z5$Z > 0], c(0.1, 
+            0.5, 0.75)), drawlabels = F, lty = c(1, 2, 3), lwd = c(1, 1, 1), col = "white")
+    }
+    # other plots
+    DvalSp <- round(as.numeric(humboldt.niche.similarity(z5, z6, correct.env = correct.env, nae = "YES", 
+        thresh.espace.z = threshinZ)[1]), 3)
+    DvalSp2 <- round(as.numeric(humboldt.niche.similarity(z5, z6, correct.env = correct.env, nae = "NO", 
+        thresh.espace.z = threshinZ)[1]), 3)
+	if (is.nan(DvalSp)==TRUE){DvalSp <- 0}
+	if (is.nan(DvalSp2)==TRUE){DvalSp2 <- 0}
+    if (DvalSp2 < DvalSp) {
+        DvalSp2 <- DvalSp
+    }
+    DvalAdjSp <- round((DvalSp/DvalClim), 3)
+    DvalAdjSp[DvalAdjSp > 1] <- 1
+    print("Similarity:")
+    print(DvalSp)
+    # print('Overlap - adjusted:') print(DvalAdjSp)
+    print("Similarity - analogous environments only:")
+    print(DvalSp2)
+    plot.new()
+    text(0.5, 0.5, paste("Niche Similarity:", "\n", "D=", DvalSp, "\n", "Analog Env ONLY:", "\n", 
+        "D=", DvalSp2), cex = 1)
+    humboldt.plot.histrogram(a, "D", "Equivalency")
+    humboldt.plot.density(b, "D", "Background 2->1")
+    humboldt.plot.density(b2, "D", "Background 1->2")
+    dev.off()
+    
+    print("FINISHED ANALYSES: now generating supplemental plots (if selected)")
+    ##################################################################################################
+    ############################# scatter plots and hist of datasets #################################
+    ##################################################################################################
+    if (p.scatter == T) {
+        pdf(file = paste(inname, "_SCATTER.pdf", sep = ""))  # create a pdf file named from the names of the 2 species
+        humboldt.plot.scatter(zz$scores.env1[1:2], xlab = paste("PC",pcx, sep = ""), ylab = paste("PC",pcy, sep = ""), main = "Environment 1 PCA", color.ramp = color.ramp)
+        humboldt.plot.scatter(zz$scores.env2[1:2], xlab = paste("PC",pcx, sep = ""), ylab = paste("PC",pcy, sep = ""), main = "Environment 2 PCA", color.ramp = color.ramp)
+        humboldt.plot.scatter(zz$scores.sp1[1:2], xlab = paste("PC",pcx, sep = ""), ylab = paste("PC",pcy, sep = ""), main = "Sp/pop 1 PCA", color.ramp = color.ramp)
+        humboldt.plot.scatter(zz$scores.sp2[1:2], xlab = paste("PC",pcx, sep = ""), ylab = paste("PC",pcy, sep = ""), main = "Sp/pop 2 PCA", color.ramp = color.ramp)
+        
+        dev.off()
+    }
+    ##################################################################################################
+    ############################## box and line plots of old/new datasets ############################
+    ##################################################################################################
+
+    if (p.boxplot == T) {
+        AmaxPCA1 <- max(zz$scores.env1[, 1])
+        AminPCA1 <- min(zz$scores.env1[, 1])
+        AmeanPCA1 <- mean(zz$scores.env1[, 1])
+        BmaxPCA1 <- max(zz$scores.env2[, 1])
+        BminPCA1 <- min(zz$scores.env2[, 1])
+        BmeanPCA1 <- mean(zz$scores.env2[, 1])
+        XminPCA1 = pmin(AmaxPCA1, BmaxPCA1)
+        XmaxPCA1 = pmax(AminPCA1, BminPCA1)
+        AmaxPCA2 <- max(zz$scores.env1[, 2])
+        AminPCA2 <- min(zz$scores.env1[, 2])
+        AmeanPCA2 <- mean(zz$scores.env1[, 2])
+        BmaxPCA2 <- max(zz$scores.env2[, 2])
+        BminPCA2 <- min(zz$scores.env2[, 2])
+        BmeanPCA2 <- mean(zz$scores.env2[, 2])
+        XminPCA2 = pmin(AmaxPCA2, BmaxPCA2)
+        XmaxPCA2 = pmax(AminPCA2, BminPCA2)
+        CmaxPCA1 <- max(zz$scores.sp1[, 1])
+        CminPCA1 <- min(zz$scores.sp1[, 1])
+        CmeanPCA1 <- mean(zz$scores.sp1[, 1])
+        DmaxPCA1 <- max(zz$scores.sp2[, 1])
+        DminPCA1 <- min(zz$scores.sp2[, 1])
+        DmeanPCA1 <- mean(zz$scores.sp2[, 1])
+        CmaxPCA2 <- max(zz$scores.sp1[, 2])
+        CminPCA2 <- min(zz$scores.sp1[, 2])
+        CmeanPCA2 <- mean(zz$scores.sp1[, 2])
+        DmaxPCA2 <- max(zz$scores.sp2[, 2])
+        DminPCA2 <- min(zz$scores.sp2[, 2])
+        DmeanPCA2 <- mean(zz$scores.sp2[, 2])
+        EmaxPCA1 <- max(zz$scores.sp1FULL[, 1])
+        EminPCA1 <- min(zz$scores.sp1FULL[, 1])
+        EmeanPCA1 <- mean(zz$scores.sp1FULL[, 1])
+        FmaxPCA1 <- max(zz$scores.sp2FULL[, 1])
+        FminPCA1 <- min(zz$scores.sp2FULL[, 1])
+        FmeanPCA1 <- mean(zz$scores.sp2FULL[, 1])
+        EmaxPCA2 <- max(zz$scores.sp1FULL[, 2])
+        EminPCA2 <- min(zz$scores.sp1FULL[, 2])
+        EmeanPCA2 <- mean(zz$scores.sp1FULL[, 2])
+        FmaxPCA2 <- max(zz$scores.sp2FULL[, 2])
+        FminPCA2 <- min(zz$scores.sp2FULL[, 2])
+        FmeanPCA2 <- mean(zz$scores.sp2FULL[, 2])
+        
+        
+        
+        pdf(file = paste(inname, "_BOXPLOT.pdf", sep = ""))
+        layout(matrix(c(1, 1, 2, 2), 2, 2, byrow = TRUE))  # create a pdf file named from the names
+        X1 = c(AminF, EminPCA1, EmeanPCA1, EmaxPCA1, AmaxF)
+        Y1 = c(BminF, FminPCA1, FmeanPCA1, FmaxPCA1, BmaxF)
+        XX1 = c(AminPCA1, CminPCA1, CmeanPCA1, CmaxPCA1, AmaxPCA1)
+        YY1 = c(BminPCA1, DminPCA1, DmeanPCA1, DmaxPCA1, BmaxPCA1)
+        df = data.frame(X1, Y1, XX1, YY1)
+        
+        
+        bp = boxplot(df, horizontal = TRUE, axes = TRUE, staplewex = 1, lwd = 1, whisklty = 1, 
+            medlwd = 0, medcol = c("olivedrab3", "skyblue2", "olivedrab3", "skyblue2"), col = c("olivedrab3", 
+                "skyblue2", "olivedrab3", "skyblue2"), range = 0, xlab = paste("environmental space- PC",pcx, sep = ""), 
+            at = c(5, 4, 2, 1), names = c("sp/pop1", "sp/pop2", "overlap\nsp/pop1", "overlap\nsp/pop2"), 
+            las = 1)
+        abline(v = AmaxPCA1, lty = 2)  #XmaxPCA1
+        abline(v = AminPCA1, lty = 2)
+        aZ = data.frame(zz$scores.sp1FULL[, 1], "sp1F")
+        bZ = data.frame(zz$scores.sp2FULL[, 1], "sp2F")
+        aF = data.frame(zz$scores.sp1[, 1], "sp1")
+        bF = data.frame(zz$scores.sp2[, 1], "sp2")
+        
+        names(aF)[1] <- "Val"
+        names(aZ)[1] <- "Val"
+        names(bF)[1] <- "Val"
+        names(bZ)[1] <- "Val"
+        names(aF)[2] <- "G"
+        names(aZ)[2] <- "G"
+        names(bF)[2] <- "G"
+        names(bZ)[2] <- "G"
+        df2 = rbind(aZ, bZ, aF, bF)
+        stripchart(Val ~ G, vertical = FALSE, data = df2, method = "jitter", jitter = 0.3, add = TRUE, 
+            pch = 20, col = "black", at = c(5, 4, 2, 1))
+        
+        X1 = c(CminF, EminPCA2, EmeanPCA2, EmaxPCA2, CmaxF)
+        Y1 = c(DminF, FminPCA2, FmeanPCA2, FmaxPCA2, DmaxF)
+        XX1 = c(AminPCA2, CminPCA2, CmeanPCA2, CmaxPCA2, AmaxPCA2)
+        YY1 = c(BminPCA2, DminPCA2, DmeanPCA2, DmaxPCA2, BmaxPCA2)
+        df3 = data.frame(X1, Y1, XX1, YY1)
+        
+        bp2 = boxplot(df3, horizontal = TRUE, axes = TRUE, staplewex = 1, lwd = 1, whisklty = 1, 
+            medlwd = 0, medcol = c("olivedrab3", "skyblue2", "olivedrab3", "skyblue2"), col = c("olivedrab3", 
+                "skyblue2", "olivedrab3", "skyblue2"), range = 0, xlab = paste("environmental space- PC",pcy, sep = ""),
+            at = c(5, 4, 2, 1), names = c("sp/pop1", "sp/pop2", "overlap\nsp/pop1", "overlap\nsp/pop2"), 
+            las = 1)
+        abline(v = AminPCA2, lty = 2)
+        abline(v = AmaxPCA2, lty = 2)
+        aZ = data.frame(zz$scores.sp1FULL[, 2], "sp1F")
+        bZ = data.frame(zz$scores.sp2FULL[, 2], "sp2F")
+        aF = data.frame(zz$scores.sp1[, 2], "sp1")
+        bF = data.frame(zz$scores.sp2[, 2], "sp2")
+        
+        names(aF)[1] <- "Val"
+        names(aZ)[1] <- "Val"
+        names(bF)[1] <- "Val"
+        names(bZ)[1] <- "Val"
+        names(aF)[2] <- "G"
+        names(aZ)[2] <- "G"
+        names(bF)[2] <- "G"
+        names(bZ)[2] <- "G"
+        df4 = rbind(aZ, bZ, aF, bF)
+        stripchart(Val ~ G, vertical = FALSE, data = df4, method = "jitter", jitter = 0.3, add = TRUE, 
+            pch = 20, col = "black", at = c(5, 4, 2, 1))
+        dev.off()
+    }
+    ##################################################################################################
+    ####################################### overlapPlots ############################################
+    #################################################################################################
+    if (p.overlap == T) {
+        humboldt.plot.overlap(in.g2e = zz, pdf.out = T, pcx=pcx, pcy=pcy, pdfname = paste(inname, "-SP-OVERLAP.pdf", sep = ""))
+    }
+l$g2e <- zz
+l$eqiv <- a
+l$b21 <- b
+l$b12 <- b2
+invisible(l)
+}
+
+
+
+```
+
 
 # testing
 
@@ -1771,39 +2238,226 @@ num.var.e<-ncol(reduc.vars$env1)
 ```{r}
 #' ##convert geographic space to espace for measuring pnt.index
 zz<-humboldt.g2e(env1=reduc.vars$env1, env2=reduc.vars$env2, sp1=occ.sp1, sp2=occ.sp2, reduce.env = 0, reductype = "PCA", non.analogous.environments = "YES", env.trim= T, e.var=c(3:num.var.e),  col.env = e.var, trim.buffer.sp1 = 200, trim.buffer.sp2 = 200, rarefy.dist = 50, rarefy.units="km", env.reso=0.41666669, kern.smooth = 1, R = 100, run.silent = F)
+
+summary(zz)
+
 #' 
 #' ##store espace scores for sp1 and environments 1,2 and both environments combined output from humboldt.g2e
 scores.env1<-zz$scores.env1[1:2]
+
 scores.env2<-zz$scores.env2[1:2]
 scores.env12<- rbind(zz$scores.env1[1:2],zz$scores.env2[1:2])
 scores.sp1<-zz$scores.sp1[1:2]
 scores.sp2<-zz$scores.sp2[1:2]
+```
+
+
+
+
+### PNT, line by line
+```{r}
+#required vars: glob.g, glob.s, sp, R = 100, kern.smooth = 1 
+
+glob.g = scores.env12
+glob.s = scores.env1
+sp = scores.sp1
+R = 100
+
+    # if (kern.smooth == "auto") {
+    #     Kern.SmZ <- "href"
+    #     Kern.SmZZ <- 0.5
+    # }
+   # if (kern.smooth != "auto") {
+        Kern.SmZ <- 0.03 * 1# kern.smooth
+        Kern.SmZZ <- 20 * Kern.SmZ
+   # }
+    # glob: global background dataset for the whole study area, glob.s: background for sp1 sp:
+    # occurrence dataset R: resolution of the grid
+    glob.g<- as.matrix(glob.g)
+    glob.s <- as.matrix(glob.s)
+    sp <- as.matrix(sp)
+    
+    th.sp = 0
+    th.env = 0
+    l <- list()
+    
+    # if (ncol(glob.g) > 2) 
+    #     stop("cannot calculate overlap with more than two axes")
+    # if (ncol(glob.g) == 1) 
+    #     stop("cannot calculate overlap on one axes")
+    # 
+    # if (ncol(glob.g) == 2) {
+        # if scores in two dimensions (e.g. PCA)
+        xmin <- min(glob.g[, 1] - Kern.SmZZ*10)
+        xmax <- max(glob.g[, 1] + Kern.SmZZ*10)
+        ymin <- min(glob.g[, 2] - Kern.SmZZ*10)
+        ymax <- max(glob.g[, 2] + Kern.SmZZ*10)  # data preparation\t
+        glob.sr <- data.frame(cbind((glob.s[, 1] - xmin)/abs(xmax - xmin), (glob.s[, 2] - ymin)/abs(ymax - 
+            ymin)))
+        spr <- data.frame(cbind((sp[, 1] - xmin)/abs(xmax - xmin), (sp[, 2] - ymin)/abs(ymax - 
+            ymin)))
+     
+        mask <- ascgen(SpatialPoints(cbind((1:R)/R, (1:R)/R)), nrcol = R - 2, count = FALSE)
+        
+        
+        sp.dens <- kernelUD(SpatialPoints(spr[, 1:2]), h = Kern.SmZ, grid = mask, kern = "bivnorm")
+        sp.dens <- raster(xmn = xmin, xmx = xmax, ymn = ymin, ymx = ymax, matrix(sp.dens$ud, 
+            nrow = R))
+        glob.s.dens <- kernelUD(SpatialPoints(glob.sr[, 1:2]), grid = mask, kern = "bivnorm")
+        glob.s.dens <- raster(xmn = xmin, xmx = xmax, ymn = ymin, ymx = ymax, matrix(glob.s.dens$ud, 
+            nrow = R))
+        x <- seq(from = min(glob.g[, 1]), to = max(glob.g[, 1]), length.out = R)
+        y <- seq(from = min(glob.g[, 2]), to = max(glob.g[, 2]), length.out = R)
+        glob.sr <- extract(glob.s.dens, glob.s)
+        Z.th <- quantile(glob.sr, th.env)
+        glob.s.dens[glob.s.dens < Z.th] <- 0
+        Z <- glob.s.dens * nrow(glob.s)/cellStats(glob.s.dens, "sum")
+        spr <- extract(sp.dens, sp)
+        z.th <- quantile(spr, th.sp)
+        sp.dens[Z == 0] <- 0
+        sp.dens[sp.dens < z.th] <- 0
+        z <- sp.dens * nrow(sp)/cellStats(sp.dens, "sum")
+        z.uncor <- z/cellStats(z, "max")
+        z.cor <- z/Z
+        z.cor[is.na(z.cor)] <- 0
+        z.cor <- z.cor/cellStats(z.cor, "max")
+        Z2 <- matrix(Z, nrow = R, ncol = R, byrow = F)
+        z.cor2 <- matrix(z.cor, nrow = R, ncol = R, byrow = F)
+        z.uncor2 <- matrix(z.uncor, nrow = R, ncol = R, byrow = F)
+        ratio=0
+        Benv=contourLines(x, (sort((y ))), Z2, nlevels=1, quantile(Z2[Z2 > 0], c(0.15)))
+        for (i in 1:length(Benv)) {		
+           Bx<-Benv[[i]]$x
+           By<-Benv[[i]]$y
+           xyB<-cbind(Bx,By)
+           p = Polygon(xyB)
+           ps1 = Polygons(list(p),1)
+           if (i ==1) {sBenv = SpatialPolygons(list(ps1))}
+           if (i !=1) {sBenv = SpatialPolygons(list(ps1))+sBenv}
+           }
+        Bsp=contourLines(x, (sort((y ))), z.uncor2, nlevels=1, levels = quantile(z.uncor2[z.uncor2 > 0], c(0.05)))
+        for (i in 1:length(Bsp)) {
+           Ax<-Bsp[[i]]$x
+           Ay<-Bsp[[i]]$y
+           xyA<-cbind(Ax,Ay)
+           p = Polygon(xyA)
+           ps1 = Polygons(list(p),1)
+           if (i ==1) {sBsp = SpatialPolygons(list(ps1))}
+           if (i !=1) {sBsp = SpatialPolygons(list(ps1))+sBsp}
+        }
+        
+        plot(sBsp)
+        #swapping 'rgeos:gUnaryUnion' for 'terra::union'
+        sBsp=terra::union(sBsp)
+        sBenv=terra::union(sBenv)
+        
+        #swapping 'rgeos::gdifference' for 'terra::erase'
+        borders = terra::erase(
+           vect(sBf),
+           
+           #modifying this code to be with sf
+           #as(gUnaryUnion(sBf),"SpatialLines"),
+           vect(st_union(st_as_sf(vect(sBsp)), st_as_sf(vect(sBenv))))
+           )
+        
+       borders = as(vect(st_union(st_as_sf(vect(sBsp)), st_as_sf(vect(sBenv)))), "Spatial")
+        bordersL<-lengthLine(borders)
+        bordersF<-lengthLine(sBsp)
+        nborders=length(borders)
+        bordersD<-bordersL[1]-bordersL[2]
+        if (nborders==3){
+             ratio<-bordersL[1]/bordersF}
+        if (nborders==2 & bordersD>=1){
+             ratio<-1
+             }
+        if (nborders==2 & bordersD<1){
+             ratio<-0
+             }
+        print("Potential Niche Truncation Index:")
+        print(ratio)
+        if (ratio>1){
+             ratio<-1}
+        if (ratio<0.05){
+             print("Minimal potential niche truncation")}
+        if (ratio>=0.05 & ratio<0.15){
+             print("Some potential niche truncation")}
+        if (ratio>=0.15 & ratio<0.3){
+             print("Moderate potential niche truncation")}			 
+        if (ratio>=0.3 ){
+             print("High potential niche truncation")}
+        print("****************")
+        l$pnt.index <- ratio		
+        }
+    return(l)  #as.matrix(Z@data@values,nrow=R,ncol=R,byrow=F)as.matrix(z.cor@data@values)as.matrix(z.uncor@data@values)
+```
+
+
+
+```{r}
 #' 
 #' ## estimate the Potential Niche Truncation Index
+#' NC - the niche truncation index is not working for me with the test data--see the paper to see that the values should be 0.408 and 0.146 respectively
 pnt1<- humboldt.pnt.index(scores.env12,scores.env1,scores.sp1,kern.smooth=1,R=100)
 pnt2<- humboldt.pnt.index(scores.env12,scores.env2,scores.sp2,kern.smooth=1,R=100)
 
 ```
 
-## testing for niche differentiation
 
+
+
+
+
+
+
+
+
+## all except pnt
+```{r}
+
+sp1 = load(file='../data/sp1.rda')
+sp2 = load(file='../data/sp2.rda')
+
+full<-humboldt.all.except.pnt(inname="full_extent", env1=reduc.vars$env1, env2=reduc.vars$env2, sp1=sp1, sp2=sp2, rarefy.dist=50, rarefy.units="km", env.reso=0.416669, reduce.env=0, reductype="PCA", non.analogous.environments="YES", correct.env=T, env.trim=T,  env.trim.type="RADIUS", trim.buffer.sp1=500, trim.buffer.sp2=500, pcx=1, pcy=2, col.env=e.var, e.var=c(3:num.var.e), R=100, kern.smooth=1, e.reps=100, b.reps=100, nae="YES",thresh.espace.z=0.0001, p.overlap=T, p.boxplot=F, p.scatter=F, run.silent=F, ncores=2)
+
+
+
+```
+
+
+
+
+
+
+
+
+## niche similarity test
 
 ```{r}
 #' ##merge environment files
 env12<-rbind(env1,env2)
 
+##remove occurrences closer than a minimum distance to each other (remove aggregation). Setting min.dist=0 will remove no occurrence.
+occ.sp1<-humboldt.occ.rarefy(in.pts=occ.sp1,colxy=2:3, rarefy.dist=40,rarefy.units="km")
+occ.sp2<-humboldt.occ.rarefy(in.pts=occ.sp2,colxy=2:3, rarefy.dist=40,rarefy.units="km")
+#'
+#' ##sample environment using humboldt.sample.spp() function
+#' ## env.reso should be the resolution of the environmental data grid
+occ.sp1<-na.exclude(humboldt.sample.spp(dfsp=occ.sp1,colspxy=2:3,colspkept=NULL,dfvar=env1,colvarxy=1:2,colvar="all",resolution=0.16667))
+occ.sp2<-na.exclude(humboldt.sample.spp(dfsp=occ.sp2,colspxy=2:3,colspkept=NULL,dfvar=env2,colvarxy=1:2,colvar="all",resolution=0.16667))
+
 
  ##row weighting of environment density for PCA
 row.w.1.env<-1-(nrow(env1)/nrow(env12))  # prevalence of env1
 row.w.2.env<-1-(nrow(env2)/nrow(env12))  # prevalence of env2
-row.w.env <-base::c(rep(row.w.1.env, nrow(env1)),rep(row.w.2.env, nrow(env2)),rep(0, nrow(occ.sp1)),rep(0, nrow(occ.sp2)))
+
+row.w.env <-c(rep(row.w.1.env, nrow(env1)),rep(row.w.2.env, nrow(env2)),rep(0, nrow(occ.sp1)),rep(0, nrow(occ.sp2)))
 #'
 #' ##create a global dataset with all environments and species, include environmental variables e.var[x1-xN]
 e.var<-c(3:21)
 
 # nc - I dont understand how/why the authors are trying to include specie in this data frame esp since there are diff numbers of observations in the environmental and corresponding species frames, so I am just creating this file with the environmental data
-## data.env.occ<-rbind(env1,env2,occ.sp1,occ.sp2)[e.var]
-data.env.occ = rbind(env1, env2)[e.var]
+data.env.occ<-rbind(env1,env2,occ.sp1,occ.sp2)[e.var]
+#data.env.occ = rbind(env1, env2)[e.var]
 
 
 ```
@@ -1817,24 +2471,24 @@ pca.cal <-dudi.pca(data.env.occ,row.w = row.w.env, center = T, scale = T, scannf
 #'
 #' ##store PCA scores for sp1 andenvironments 1,2 and both environments combined
 #' ## specific exact locations of environment and sp. data in PCA for storage
-#' row.env1<-1:nrow(env1)
-#' row.env2<-(nrow(env1)+1):(nrow(env1)+nrow(env2))
-#' row.env12<-1:(nrow(env1)+nrow(env2))
-#' row.sp1<-(nrow(env1)+nrow(env2)+1):(nrow(env1)+nrow(env2)+nrow(occ.sp1))
-#' row.sp2<-(nrow(env1)+nrow(env2)+nrow(occ.sp1)+1):(nrow(env1)+nrow(env2)+nrow(occ.sp1)+nrow(occ.sp2))
+row.env1<-1:nrow(env1)
+row.env2<-(nrow(env1)+1):(nrow(env1)+nrow(env2))
+row.env12<-1:(nrow(env1)+nrow(env2))
+row.sp1<-(nrow(env1)+nrow(env2)+1):(nrow(env1)+nrow(env2)+nrow(occ.sp1))
+row.sp2<-(nrow(env1)+nrow(env2)+nrow(occ.sp1)+1):(nrow(env1)+nrow(env2)+nrow(occ.sp1)+nrow(occ.sp2))
 #' ##glob.g: global background dataset for the whole study area 
-#' glob.g<- pca.cal$li[row.env12,]
+glob.g<- pca.cal$li[row.env12,]
 #' ##glob.s: background for sp1
-#' glob.s<- pca.cal$li[row.env1,]
+glob.s<- pca.cal$li[row.env1,]
 #' ##glob2: background for sp2
-#' glob.s2<- pca.cal$li[row.env2,]
+glob.s2<- pca.cal$li[row.env2,]
 #' ##sp1: occurrence dataset
-#' sp1<- pca.cal$li[row.sp1,]
+sp1<- pca.cal$li[row.sp1,]
 #' ##sp2: occurrence dataset
-#' sp2<- pca.cal$li[row.sp2,]
+sp2<- pca.cal$li[row.sp2,]
 #'
 #' ## run Create a grid of Environmental Space Function
-#' z1<- humboldt.grid.espace(glob.g,glob.s,sp1,R=100,kern.smooth=1)
-#' z2<- humboldt.grid.espace(glob.g,glob.s2,sp2,R=100,kern.smooth=1)
-#' humboldt.niche.similarity(z1,z2,correct.env=F)
+z1<- humboldt.grid.espace(glob.g,glob.s,sp1,R=100,kern.smooth=1)
+z2<- humboldt.grid.espace(glob.g,glob.s2,sp2,R=100,kern.smooth=1)
+humboldt.niche.similarity(z1,z2,correct.env=F)
 ```
